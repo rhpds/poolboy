@@ -7,6 +7,7 @@
   - test-02.yaml
   - test-approval-01.yaml
   - test-ignore-01.yaml
+  - test-lifespan-start-01.yaml
   - test-linked-01.yaml
   - test-linked-02.yaml
   - test-linked-03.yaml
