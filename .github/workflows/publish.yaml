@@ -8,8 +8,6 @@ on:
     - 'v[0-9]*'
 jobs:
   publish:
-    env:
-      IMAGE_NAME: poolboy
     runs-on: ubuntu-latest
     steps:
     - name: Checkout source
@@ -45,9 +43,9 @@ jobs:
       if: steps.image_tags.outputs.IMAGE_TAGS
       uses: redhat-actions/buildah-build@v2
       with:
-        image: ${{ env.IMAGE_NAME }}
+        image: ${{ vars.IMAGE_NAME }}
         tags: ${{ steps.image_tags.outputs.IMAGE_TAGS }}
-        containerfiles: Dockerfile
+        containerfiles: Containerfile
 
     - name: Push image to registry
       id: push-to-registry
@@ -57,8 +55,8 @@ jobs:
         image: ${{ steps.buildah-build.outputs.image }}
         tags: ${{ steps.buildah-build.outputs.tags }}
         registry: ${{ vars.IMAGE_REGISTRY }}/${{ vars.IMAGE_REPOSITORY }}
-        username: ${{ secrets.QUAY_USERNAME }}
-        password: ${{ secrets.QUAY_PASSWORD }}
+        username: ${{ secrets.IMAGE_REGISTRY_USERNAME }}
+        password: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
 
   publish-helm-charts:
     needs: publish
