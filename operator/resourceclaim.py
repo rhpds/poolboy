@@ -680,11 +680,6 @@ class ResourceClaim(KopfObject):
             and self.lifespan_start_datetime > datetime.now(timezone.utc):
                 return
 
-            if self.lifespan_start_datetime:
-                logger.info(f"Lifespan start for {self} is {self.lifespan_start_datetime.strftime('%FT%TZ')}")
-            else:
-                logger.info(f"Lifespan start for {self} is undefined")
-
             if self.is_detached:
                 # Normally lifespan end is tracked by the ResourceHandle.
                 # Detached ResourceClaims have no handle.
