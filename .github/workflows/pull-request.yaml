@@ -14,15 +14,14 @@ jobs:
     #- name: Static tests
     #  run: |
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-
-    - name: Build example from s2i image
-      uses: docker/build-push-action@v2
+    - name: Buildah Action
+      id: buildah-build
+      if: steps.image_tags.outputs.IMAGE_TAGS
+      uses: redhat-actions/buildah-build@v2
       with:
-        push: false
-        repository: poolboy
-        tags: ${{ github.sha }}
+        image: ${{ vars.IMAGE_NAME }}
+        tags: latest
+        containerfiles: Containerfile
 
     #- name: Test image
     #  run: |
