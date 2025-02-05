@@ -1,0 +1,135 @@
+---
+#
+# Test lifespan start
+#
+- name: Create ResourceProvider test-lifespan-start-01
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceProvider
+      metadata:
+        name: test-lifespan-start-01
+        namespace: "{{ poolboy_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+
+      spec:
+        override:
+          apiVersion: "{{ poolboy_domain }}/v1"
+          kind: ResourceClaimTest
+          metadata:
+            name: test-lifespan-start-01-{% raw %}{{ guid }}{% endraw %}
+            namespace: "{{ poolboy_test_namespace }}"
+        parameters:
+        - name: stringvar
+          allowUpdate: true
+          required: true
+          validation:
+            openAPIV3Schema:
+              type: string
+        template:
+          definition:
+            spec:
+              stringvalue: "{% raw %}{{ stringvar }}{% endraw %}"
+          enable: true
+
+- name: Create ResourceClaim test-lifespan-start-01
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceClaim
+      metadata:
+        name: test-lifespan-start-01
+        namespace: "{{ poolboy_test_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        lifespan:
+          # Request to start lifespan in 3 seconds
+          start: >-
+            {{ "%FT%TZ" | strftime(
+                 now(true).strftime("%s") | int + 3
+               )
+            }}
+        provider:
+          name: test-lifespan-start-01
+          parameterValues:
+            stringvar: "test"
+
+- name: Pause 1 second
+  pause:
+    seconds: 1
+
+- name: Verify ResourceClaim test-lifespan-start-01 not yet handled
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-lifespan-start-01
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim
+  failed_when: >-
+    r_get_resource_claim.resources[0].status.lifespan.start is defined
+
+- name: Wait for ResourceClaim test-lifespan-start-01 handling to start
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-lifespan-start-01
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim
+  failed_when: >-
+    r_get_resource_claim.resources[0].status.lifespan.start is undefined or
+    r_get_resource_claim.resources[0].status.resourceHandle.name is undefined or
+    r_get_resource_claim.resources[0].status.resources[0].reference is undefined
+  delay: 1
+  retries: 5
+  until: r_get_resource_claim is successful
+
+- name: Delete ResourceClaim test-lifespan-start-01
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-lifespan-start-01
+    namespace: "{{ poolboy_test_namespace }}"
+    state: absent
+
+- name: Verify delete of ResourceClaim test-lifespan-start-01
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-lifespan-start-01
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_verify_delete_resource_claim
+  failed_when: r_verify_delete_resource_claim.resources | length != 0
+  until: r_verify_delete_resource_claim is success
+  retries: 10
+  delay: 1
+
+- name: Verify delete of ResourceHandle for test-lifespan-start-01
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    name: "{{ r_get_resource_claim.resources[0].status.resourceHandle.name }}"
+    namespace: "{{ poolboy_namespace }}"
+  register: r_get_resource_handle
+  failed_when: r_get_resource_handle.resources | length != 0
+  until: r_get_resource_handle is success
+  retries: 10
+  delay: 1
+
+- name: Verify delete of ResourceClaimTest test-lifespan-start-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaimTest
+    name: "{{ r_get_resource_claim.resources[0].status.resources[0].reference.name }}"
+    namespace: "{{ r_get_resource_claim.resources[0].status.resources[0].reference.namespace }}"
+  register: r_get_resource_claim_test
+  failed_when: r_get_resource_claim_test.resources | length != 0
+  until: r_get_resource_claim_test is success
+  delay: 1
+  retries: 10
+...

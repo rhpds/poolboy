@@ -219,13 +219,18 @@ class ResourceClaim(KopfObject):
 
     @property
     def lifespan_start_datetime(self) -> Optional[datetime]:
+        """Return datetime when lifespan of ResourceClaim started or is requested to start."""
         timestamp = self.lifespan_start_timestamp
         if timestamp:
             return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
 
     @property
     def lifespan_start_timestamp(self) -> Optional[str]:
+        """Return timestamp when lifespan of ResourceClaim started or is requested to start."""
         timestamp = self.status.get('lifespan', {}).get('start')
+        if timestamp:
+            return timestamp
+        timestamp = self.spec.get('lifespan', {}).get('start')
         if timestamp:
             return timestamp
         return self.creation_timestamp
@@ -245,18 +250,6 @@ class ResourceClaim(KopfObject):
         lifespan = self.spec.get('lifespan')
         if lifespan:
             return lifespan.get('end')
-
-    @property
-    def requested_lifespan_start_datetime(self):
-        timestamp = self.requested_lifespan_start_timestamp
-        if timestamp:
-            return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
-
-    @property
-    def requested_lifespan_start_timestamp(self) -> Optional[str]:
-        lifespan = self.spec.get('lifespan')
-        if lifespan:
-            return lifespan.get('start')
 
     @property
     def resource_handle_description(self) -> str:
@@ -686,6 +679,11 @@ class ResourceClaim(KopfObject):
             if self.lifespan_start_datetime \
             and self.lifespan_start_datetime > datetime.now(timezone.utc):
                 return
+
+            if self.lifespan_start_datetime:
+                logger.info(f"Lifespan start for {self} is {self.lifespan_start_datetime.strftime('%FT%TZ')}")
+            else:
+                logger.info(f"Lifespan start for {self} is undefined")
 
             if self.is_detached:
                 # Normally lifespan end is tracked by the ResourceHandle.
