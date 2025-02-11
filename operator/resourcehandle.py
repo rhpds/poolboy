@@ -848,11 +848,6 @@ class ResourceHandle(KopfObject):
                 api_version=api_version, kind=kind, name=name, namespace=namespace,
             )
             resource_states.append(resource)
-            if not resource:
-                if namespace:
-                    logger.warning(f"Mangaged resource {api_version} {kind} {name} in {namespace} not found.")
-                else:
-                    logger.warning(f"Mangaged resource {api_version} {kind} {name} not found.")
         return resource_states
 
     async def handle_delete(self, logger: kopf.ObjectLogger) -> None:
