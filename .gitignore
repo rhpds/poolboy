@@ -8,3 +8,4 @@ __pycache__
 .odo/
 .odo/env
 .odo/odo-file-index.json
+.venv/
