@@ -23,3 +23,5 @@ jobs:
         file: Containerfile
         push: false
         tags: ${{ vars.IMAGE_NAME }}:latest
+        cache-from: type=gha,scope=${{ vars.IMAGE_NAME }}
+        cache-to: type=gha,mode=max,scope=${{ vars.IMAGE_NAME }}
