@@ -752,13 +752,7 @@ class ResourceProvider:
         })
 
         if resource_claim:
-            # TODO: The following annotations are kept for backward
-            # compatibility and will be removed in the future.
             resource_definition['metadata']['annotations'].update({
-                f"{Poolboy.operator_domain}/resource-claim-name": resource_claim.name,
-                f"{Poolboy.operator_domain}/resource-claim-namespace": resource_claim.namespace,
-            })
-            resource_definition['metadata'].setdefault('labels', {}).update({
                 f"{Poolboy.operator_domain}/resource-claim-name": resource_claim.name,
                 f"{Poolboy.operator_domain}/resource-claim-namespace": resource_claim.namespace,
             })
