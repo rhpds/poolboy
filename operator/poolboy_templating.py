@@ -225,6 +225,9 @@ def recursive_process_template_strings(template, template_style='jinja2', variab
     If a template string ends in a bool, float, int, or object filter then
     output will be converted from string to the corresponding type.
 
+    This method is used in various places including generating status summary,
+    validating parameters, checking heath/readiness, and generating resource definitions.
+
     Keyword arguments:
     template_style -- Style of templates used. Currently only "jinja2" is supported
     variables -- simple key/value pair variables
