@@ -457,7 +457,7 @@ class TestJsonPatch(unittest.TestCase):
             "A"
         )
 
-    def test_32(self):
+    def test_33(self):
         template = "{{ a | int }}"
         template_variables = {
             "a": "{{ b }}",
@@ -469,6 +469,16 @@ class TestJsonPatch(unittest.TestCase):
             ),
             2
         )
+
+    def test_34(self):
+        template = "{{ a }}"
+        template_variables = {
+            "a": "{{ a }}",
+        }
+        with self.assertRaises(Exception):
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
 
 if __name__ == '__main__':
     unittest.main()
