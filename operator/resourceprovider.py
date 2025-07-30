@@ -53,8 +53,6 @@ class _LinkedResourceProvider:
             return False
 
         vars_ = {
-            **resource_provider.vars,
-            **resource_handle.vars,
             'linked_resource_provider': linked_resource_provider,
             'linked_resource_state': linked_resource_state,
             'resource_claim': resource_claim,
@@ -70,7 +68,9 @@ class _LinkedResourceProvider:
             )
 
         return recursive_process_template_strings(
-            '{{(' + self.wait_for + ')|bool}}', resource_provider.template_style, vars_
+            '{{(' + self.wait_for + ')|bool}}', resource_provider.template_style,
+            variables = vars_,
+            template_variables = {**resource_provider.vars, **resource_handle.vars},
         )
 
     def check_when(self,
@@ -92,14 +92,14 @@ class _LinkedResourceProvider:
         resource_handle_vars = resource_handle.vars if resource_handle else {}
 
         return recursive_process_template_strings(
-            '{{(' + self.when + ')|bool}}', resource_provider.template_style, {
-                **resource_provider.vars,
-                **resource_handle_vars,
+            '{{(' + self.when + ')|bool}}', resource_provider.template_style,
+            variables = {
                 **parameter_values,
                 "resource_claim": resource_claim,
                 "resource_handle": resource_handle,
                 "resource_provider": self,
-            }
+            },
+            template_variables = {**resource_provider.vars, **resource_handle_vars},
         )
 
 
@@ -377,10 +377,8 @@ class ResourceProvider:
 
         value = recursive_process_template_strings(
             template = value,
-            variables = {
-                **self.vars,
-                "resource_claim": resource_claim,
-            },
+            variables = {"resource_claim": resource_claim},
+            template_variables = self.vars,
         )
 
         if not value:
@@ -410,7 +408,8 @@ class ResourceProvider:
                             "resource_index": resource_index,
                             "resource_name": resource.get('name'),
                             "resource_provider": self,
-                        }
+                        },
+                        template_variables = self.vars,
                     ),
                     overwrite=False,
                 )
@@ -445,6 +444,7 @@ class ResourceProvider:
                     **resource_state,
                     "resource_handle": resource_handle,
                 },
+                template_variables = self.vars,
             )
         except Exception:
             logger.exception("Failed health check on {resource_handle} with {self}")
@@ -464,6 +464,7 @@ class ResourceProvider:
                     **resource_state,
                     "resource_handle": resource_handle,
                 },
+                template_variables = self.vars,
             )
         except Exception:
             logger.exception("Failed readiness check on {resource_handle} with {self}")
@@ -531,8 +532,6 @@ class ResourceProvider:
 
         resource_handle_vars = resource_handle.vars if resource_handle else {}
         vars_ = {
-            **self.vars,
-            **resource_handle_vars,
             **parameter_values,
             "resource_claim": resource_claim,
             "resource_handle": resource_handle,
@@ -555,7 +554,10 @@ class ResourceProvider:
                     resource_handle = resource_handle,
                     resource_name = linked_resource_provider.resource_name,
                     parameter_values = {
-                        key: recursive_process_template_strings(value, variables=vars_)
+                        key: recursive_process_template_strings(value,
+                            variables = vars_,
+                            template_variables = {**self.vars, **resource_handle_vars},
+                        )
                         for key, value in linked_resource_provider.parameter_values.items()
                     },
                 )
@@ -586,23 +588,19 @@ class ResourceProvider:
         return template == cmp_template
 
     def make_status_summary(self,
-        resource_claim: Optional[ResourceClaimT] = None,
-        resource_handle: Optional[ResourceHandleT] = None,
+        resource_handle: ResourceHandleT,
         resources: List[Mapping] = [],
     ) -> Mapping:
-        variables = {**self.vars}
-        if resource_claim:
-            variables.update(resource_claim.parameter_values)
-        else:
-            variables.update(resource_handle.parameter_values)
-
-        variables['resource_claim'] = resource_claim
-        variables['resource_handle'] = resource_handle
-        variables['resources'] = resources
+        variables = {
+            **resource_handle.parameter_values,
+            'resource_handle': resource_handle,
+            'resources': resources,
+        }
 
         return recursive_process_template_strings(
             self.status_summary_template,
             variables = variables,
+            template_variables = {**self.vars, **resource_handle.vars},
         )
 
     def processed_template(self,
@@ -620,7 +618,8 @@ class ResourceProvider:
                 "resource_claim": resource_claim,
                 "resource_handle": resource_handle,
                 "resource_provider": self,
-            }
+            },
+            template_variables = {**self.vars, **resource_handle_vars},
         )
 
     def validate_resource_template(self,
@@ -632,9 +631,7 @@ class ResourceProvider:
             self.resource_template_validator.validate(template)
 
         resource_handle_vars = resource_handle.vars if resource_handle else {}
-        vars_ = {
-            **self.vars,
-            **resource_handle_vars,
+        variables = {
             "resource_claim": resource_claim,
             "resource_handle": resource_handle,
             "resource_provider": self,
@@ -644,7 +641,9 @@ class ResourceProvider:
             name = check['name']
             try:
                 check_successful = recursive_process_template_strings(
-                    '{{(' + check['check'] + ')|bool}}', variables=vars_
+                    '{{(' + check['check'] + ')|bool}}',
+                    variables=variables,
+                    template_variables = {**self.vars, **resource_handle_vars},
                 )
                 if not check_successful:
                     raise _ValidationException(f"Validation check failed: {name}")
@@ -678,10 +677,7 @@ class ResourceProvider:
         resource_definition = deepcopy(resource_template)
         if 'override' in self.spec:
             if self.template_enable:
-                all_vars = {
-                    **self.vars,
-                    **vars_,
-                }
+                all_vars = { **vars_ }
                 all_vars.update({
                     "guid": resource_handle.guid,
                     "requester_identities": requester_identities,
@@ -699,10 +695,13 @@ class ResourceProvider:
                     "resource_template": resource_templates[resource_index],
                     "resource_templates": resource_templates,
                 })
+                resource_handle_vars = resource_handle.vars if resource_handle else {}
                 deep_merge(
                     resource_definition,
                     recursive_process_template_strings(
-                        self.override, self.template_style, all_vars
+                        self.override, self.template_style,
+                        variables = all_vars,
+                        template_variables = {**self.vars, **resource_handle_vars}
                     )
                 )
             else:

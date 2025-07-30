@@ -364,8 +364,6 @@ class ResourceClaim(KopfObject):
         # resource_provider may be None if there is no top-level provider.
         resource_provider_vars = resource_provider.vars if resource_provider else {}
         vars_ = {
-            **resource_provider_vars,
-            **resource_handle.vars,
             "resource_claim": self,
             "resource_handle": resource_handle,
             "resource_provider": resource_provider,
@@ -375,7 +373,8 @@ class ResourceClaim(KopfObject):
         }
         check_value = recursive_process_template_strings(
             '{{(' + when_condition + ')|bool}}',
-            variables = vars_
+            variables = vars_,
+            template_variables = { **resource_provider_vars, **resource_handle.vars },
         )
         return check_value
 
@@ -685,7 +684,7 @@ class ResourceClaim(KopfObject):
                 # Detached ResourceClaims have no handle.
                 if self.lifespan_end_datetime \
                 and self.lifespan_end_datetime < datetime.now(timezone.utc):
-                    logger.info(f"Deleting detacthed {self} at end of lifespan")
+                    logger.info(f"Deleting detached {self} at end of lifespan")
                     await self.delete()
                 # No further processing for detached ResourceClaim
                 return
@@ -975,8 +974,6 @@ class ResourceClaim(KopfObject):
 
         validation_errors = []
         vars_ = {
-            **resource_provider.vars,
-            **resource_handle_vars,
             "resource_claim": self,
             "resource_handle": resource_handle,
             "resource_provider": resource_provider,
@@ -995,7 +992,8 @@ class ResourceClaim(KopfObject):
                     parameters_from_defaults.add(parameter.name)
                     parameter_values[parameter.name] = recursive_process_template_strings(
                         parameter.default_template,
-                        variables = { **vars_, **parameter_values }
+                        variables = { **vars_, **parameter_values },
+                        template_variables = {**resource_provider.vars, **resource_handle_vars},
                     )
                 elif parameter.default_value != None:
                     parameters_from_defaults.add(parameter.name)
@@ -1029,7 +1027,8 @@ class ResourceClaim(KopfObject):
                     try:
                         check_successful = recursive_process_template_strings(
                             '{{(' + validation_check.check + ')|bool}}',
-                            variables = { **vars_, **parameter_values, "value": value }
+                            variables = { **vars_, **parameter_values, "value": value },
+                            template_variables = {**resource_provider.vars, **resource_handle_vars},
                         )
                         if not check_successful:
                             validation_errors.append(f"Parameter {parameter.name} failed check: {validation_check.name}")
