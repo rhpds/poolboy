@@ -218,6 +218,18 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}, te
         return template_out
 
 def recursive_process_template_strings(template, template_style='jinja2', variables={}, template_variables={}):
+    """Take a template and recursively process template strings within it.
+    The template may be any type.
+    If it is a dictionary or list then all values will be recursively procesed.
+    Strings will be handled as templates and values replaced by output.
+    If a template string ends in a bool, float, int, or object filter then
+    output will be converted from string to the corresponding type.
+
+    Keyword arguments:
+    template_style -- Style of templates used. Currently only "jinja2" is supported
+    variables -- simple key/value pair variables
+    template_variables -- variables which may contain template strings and should only come from trusted sources
+    """
     omit = '__omit_place_holder__' + ''.join(random.choices('abcdef0123456789', k=40))
     return __recursive_strip_omit(
         __recursive_process_template_strings(
