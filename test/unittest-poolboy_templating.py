@@ -9,9 +9,9 @@ from poolboy_templating import recursive_process_template_strings, seconds_to_in
 class TestJsonPatch(unittest.TestCase):
     def test_00(self):
         template = {}
-        template_vars = {}
+        variables = {}
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {}
         )
 
@@ -24,9 +24,9 @@ class TestJsonPatch(unittest.TestCase):
                 "e": ["a", "b", "c"]
             }
         }
-        template_vars = {}
+        variables = {}
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             template
         )
 
@@ -34,11 +34,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ foo }}",
         }
-        template_vars = {
+        variables = {
             "foo": "bar"
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": "bar"
             }
@@ -48,11 +48,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": ["{{ foo }}"],
         }
-        template_vars = {
+        variables = {
             "foo": "bar"
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": ["bar"]
             }
@@ -62,11 +62,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ foo }}"
         }
-        template_vars = {
+        variables = {
             "foo": True
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": "True"
             }
@@ -76,11 +76,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ foo | bool }}"
         }
-        template_vars = {
+        variables = {
             "foo": True
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": True
             }
@@ -90,12 +90,12 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ numerator / denominator }}"
         }
-        template_vars = {
+        variables = {
             "numerator": 1,
             "denominator": 2,
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": "0.5"
             }
@@ -105,12 +105,12 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ (numerator / denominator) | float }}"
         }
-        template_vars = {
+        variables = {
             "numerator": 1,
             "denominator": 2,
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": 0.5
             }
@@ -120,11 +120,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ n }}"
         }
-        template_vars = {
+        variables = {
             "n": 21,
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": "21"
             }
@@ -134,11 +134,11 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "a": "{{ n | int }}"
         }
-        template_vars = {
+        variables = {
             "n": 21
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "a": 21
             }
@@ -148,13 +148,13 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "user": "{{ user }}"
         }
-        template_vars = {
+        variables = {
             "user": {
                 "name": "alice"
             }
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "user": "{'name': 'alice'}"
             }
@@ -164,13 +164,13 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "user": "{{ user | object }}"
         }
-        template_vars = {
+        variables = {
             "user": {
                 "name": "alice"
             }
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars),
+            recursive_process_template_strings(template, 'jinja2', variables),
             {
                 "user": {
                     "name": "alice"
@@ -182,48 +182,48 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "now": "{{ now() }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['now'], r'^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+$')
 
     def test_13(self):
         template = {
             "now": "{{ now(True, '%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['now'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
 
     def test_14(self):
         template = {
             "ts": "{{ (now() + timedelta(hours=3)).strftime('%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['ts'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
 
     def test_15(self):
         template = {
             "ts": "{{ (now() + timedelta(hours=3)).strftime('%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['ts'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
 
     def test_16(self):
         template = {
             "ts": "{{ (datetime.now(timezone.utc) + timedelta(hours=3)).strftime('%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['ts'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
 
     def test_17(self):
         template = {
             "ts": "{{ (datetime.now(timezone.utc) + '3h' | parse_time_interval).strftime('%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['ts'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
 
     def test_18(self):
@@ -231,8 +231,8 @@ class TestJsonPatch(unittest.TestCase):
             "ts1": "{{ timestamp.add('3h') }}",
             "ts2": "{{ (datetime.now(timezone.utc) + timedelta(hours=3)).strftime('%FT%TZ') }}"
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertRegex(template_out['ts1'], r'^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ$')
         self.assertEqual(template_out['ts1'], template_out['ts2'])
 
@@ -240,24 +240,24 @@ class TestJsonPatch(unittest.TestCase):
         template = {
             "ts": "{{ timestamp('1970-01-01T01:02:03Z').add('3h') }}",
         }
-        template_vars = {}
-        template_out = recursive_process_template_strings(template, 'jinja2', template_vars)
+        variables = {}
+        template_out = recursive_process_template_strings(template, 'jinja2', variables)
         self.assertEqual(template_out['ts'], '1970-01-01T04:02:03Z')
 
     def test_20(self):
         template = "{{ user | json_query('name') }}"
-        template_vars = {
+        variables = {
             "user": {
                 "name": "alice"
             }
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), "alice"
+            recursive_process_template_strings(template, 'jinja2', variables), "alice"
         )
 
     def test_21(self):
         template = "{{ users | json_query('[].name') | object }}"
-        template_vars = {
+        variables = {
             "users": [
                 {
                     "name": "alice",
@@ -269,7 +269,7 @@ class TestJsonPatch(unittest.TestCase):
             ]
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), ["alice", "bob"]
+            recursive_process_template_strings(template, 'jinja2', variables), ["alice", "bob"]
         )
 
     # Test complicated case used to determine desired state in babylon governor
@@ -288,7 +288,7 @@ class TestJsonPatch(unittest.TestCase):
         stopped
         {%- endif -%}
         """
-        template_vars = {
+        variables = {
             "resource_states": [
                 {
                     "status": {
@@ -334,23 +334,23 @@ class TestJsonPatch(unittest.TestCase):
         }
 
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), "stopped"
+            recursive_process_template_strings(template, 'jinja2', variables), "stopped"
         )
 
-        template_vars['resource_templates'][0]['spec']['vars']['action_schedule']['stop'] = '2099-12-31T23:59:59Z'
+        variables['resource_templates'][0]['spec']['vars']['action_schedule']['stop'] = '2099-12-31T23:59:59Z'
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), "started"
+            recursive_process_template_strings(template, 'jinja2', variables), "started"
         )
 
-        template_vars['resource_templates'][0]['spec']['vars']['action_schedule']['stop'] = '2022-01-01T00:00:00Z'
-        del template_vars['resource_states'][1]['status']['towerJobs']['provision']['completeTimestamp']
+        variables['resource_templates'][0]['spec']['vars']['action_schedule']['stop'] = '2022-01-01T00:00:00Z'
+        del variables['resource_states'][1]['status']['towerJobs']['provision']['completeTimestamp']
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), "started"
+            recursive_process_template_strings(template, 'jinja2', variables), "started"
         )
 
-        del template_vars['resource_states'][1]['status']['towerJobs']['provision']
+        del variables['resource_states'][1]['status']['towerJobs']['provision']
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), "started"
+            recursive_process_template_strings(template, 'jinja2', variables), "started"
         )
 
     def test_23(self):
@@ -364,18 +364,18 @@ class TestJsonPatch(unittest.TestCase):
             "a": "A",
             "b": "{{ omit }}",
         }
-        template_vars = {}
+        variables = {}
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A"}
         )
 
     def test_25(self):
         template = [
             "a", "{{ omit }}", "b"
         ]
-        template_vars = {}
+        variables = {}
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), ["a", "b"]
+            recursive_process_template_strings(template, 'jinja2', variables), ["a", "b"]
         )
 
     def test_26(self):
@@ -383,57 +383,102 @@ class TestJsonPatch(unittest.TestCase):
             "a": "{{ a | default(omit) }}",
             "b": "{{ b | default(omit) }}",
         }
-        template_vars = {
+        variables = {
             "a": "A",
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A"}
         )
 
     def test_27(self):
         template = "{{ l | json_query('from_items(zip([].keys(@)[], [].values(@)[]))') | object }}"
-        template_vars = {
+        variables = {
             "l": [{"a": "A", "b": "X"}, {"b": "B", "c": "C"}, {"d": "D"}]
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A", "b": "B", "c": "C", "d": "D"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A", "b": "B", "c": "C", "d": "D"}
         )
 
     def test_28(self):
         template = "{{ l | merge_list_of_dicts | object }}"
-        template_vars = {
+        variables = {
             "l": [{"a": "A", "b": "X"}, {"b": "B", "c": "C"}, {"d": "D"}]
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A", "b": "B", "c": "C", "d": "D"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A", "b": "B", "c": "C", "d": "D"}
         )
 
     def test_29(self):
         template = "{{ l | merge_list_of_dicts | object }}"
-        template_vars = {
+        variables = {
             "l": [{"a": "A", "b": "X"}, None, {"b": "B", "c": "C"}, {}, {"d": "D"}]
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A", "b": "B", "c": "C", "d": "D"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A", "b": "B", "c": "C", "d": "D"}
         )
 
     def test_30(self):
         template = "{{ l | merge_list_of_dicts | object }}"
-        template_vars = {
+        variables = {
             "l": []
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {}
+            recursive_process_template_strings(template, 'jinja2', variables), {}
         )
 
     def test_31(self):
         template = "{{ l | merge_list_of_dicts | object }}"
-        template_vars = {
+        variables = {
             "l": [{"a": "A"}]
         }
         self.assertEqual(
-            recursive_process_template_strings(template, 'jinja2', template_vars), {"a": "A"}
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A"}
         )
+
+    def test_31(self):
+        template = "{{ l | merge_list_of_dicts | object }}"
+        variables = {
+            "l": [{"a": "A"}]
+        }
+        self.assertEqual(
+            recursive_process_template_strings(template, 'jinja2', variables), {"a": "A"}
+        )
+
+    def test_32(self):
+        template = "{{ a }}"
+        template_variables = {
+            "a": "{{ b }}",
+            "b": "A",
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            "A"
+        )
+
+    def test_33(self):
+        template = "{{ a | int }}"
+        template_variables = {
+            "a": "{{ b }}",
+            "b": 2,
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            2
+        )
+
+    def test_34(self):
+        template = "{{ a }}"
+        template_variables = {
+            "a": "{{ a }}",
+        }
+        with self.assertRaises(Exception):
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
 
 if __name__ == '__main__':
     unittest.main()

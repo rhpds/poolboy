@@ -299,13 +299,9 @@ class ResourceHandle(KopfObject):
             lifespan_relative_maximum = resource_provider.lifespan_relative_maximum
             lifespan_relative_maximum_timedelta = resource_provider.get_lifespan_maximum_timedelta(resource_claim)
         else:
-            vars_ = {}
-
             resource_providers = await resource_claim.get_resource_providers(resource_claim_resources)
             for i, claim_resource in enumerate(resource_claim_resources):
                 provider = resource_providers[i]
-                vars_.update(provider.vars)
-
                 provider_lifespan_default_timedelta = provider.get_lifespan_default_timedelta(resource_claim)
                 if provider_lifespan_default_timedelta:
                     if not lifespan_default_timedelta \
@@ -334,7 +330,6 @@ class ResourceHandle(KopfObject):
                 resources.append(resources_item)
 
             definition['spec']['resources'] = resources
-            definition['spec']['vars'] = vars_
 
         lifespan_end_datetime = None
         lifespan_start_datetime = datetime.now(timezone.utc)
@@ -744,10 +739,10 @@ class ResourceHandle(KopfObject):
         value = recursive_process_template_strings(
             template = value,
             variables = {
-                **self.vars,
                 "resource_claim": resource_claim,
                 "resource_handle": self,
             },
+            template_variables = self.vars,
         )
 
         return value

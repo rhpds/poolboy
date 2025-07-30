@@ -8,8 +8,10 @@ import random
 import re
 
 from datetime import datetime, timedelta, timezone
-from distutils.util import strtobool
 from strgen import StringGenerator
+from str2bool import str2bool
+
+MAX_RECURSION_DEPTH = 100
 
 class TimeStamp(object):
     def __init__(self, set_datetime=None):
@@ -105,13 +107,13 @@ jinja2envs = {
         undefined = jinja2.ChainableUndefined,
     ),
 }
-jinja2envs['jinja2'].filters['bool'] = lambda x: bool(strtobool(x)) if isinstance(x, str) else bool(x)
+jinja2envs['jinja2'].filters['bool'] = lambda x: bool(str2bool(x)) if isinstance(x, str) else bool(x)
 jinja2envs['jinja2'].filters['json_query'] = lambda x, query: jmespath.search(query, x)
 jinja2envs['jinja2'].filters['merge_list_of_dicts'] = lambda a: functools.reduce(lambda d1, d2: {**(d1 or {}), **(d2 or {})}, a) if a else {}
 jinja2envs['jinja2'].filters['object'] = lambda x: json.dumps(x)
-jinja2envs['jinja2'].filters['parse_time_interval'] = lambda x: timedelta(seconds=pytimeparse.parse(x))
+jinja2envs['jinja2'].filters['parse_time_interval'] = lambda x: timedelta(seconds=pytimeparse.parse(str(x)))
 jinja2envs['jinja2'].filters['strgen'] = lambda x: StringGenerator(x).render()
-jinja2envs['jinja2'].filters['to_datetime'] = lambda s, f='%Y-%m-%d %H:%M:%S': datetime.strptime(s, f)
+jinja2envs['jinja2'].filters['to_datetime'] = lambda s, f='%Y-%m-%d %H:%M:%S': datetime.strptime(str(s), f)
 jinja2envs['jinja2'].filters['to_json'] = lambda x: json.dumps(x)
 
 # Regex to detect if it looks like this value should be rendered as a raw type
@@ -144,18 +146,19 @@ jinja2envs['jinja2'].filters['to_json'] = lambda x: json.dumps(x)
 #       name: alice
 type_filter_match_re = re.compile(r'^{{(?!.*{{).*\| *(bool|float|int|object) *}}$')
 
-def check_condition(condition, template_style='jinja2', variables={}):
+def check_condition(condition, template_style='jinja2', variables={}, template_variables={}):
     return jinja2process(
         template="{{ (" + condition + ") | bool}}",
         template_style=template_style,
-        variables=variables
+        variables=variables,
+        template_variables=template_variables,
     )
 
 def j2now(utc=False, fmt=None):
     dt = datetime.now(timezone.utc if utc else None)
     return dt.strftime(fmt) if fmt else dt
 
-def jinja2process(template, omit=None, template_style='jinja2', variables={}):
+def jinja2process(template, omit=None, template_style='jinja2', variables={}, template_variables={}):
     variables = copy.copy(variables)
     variables['datetime'] = datetime
     variables['now'] = j2now
@@ -163,8 +166,38 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}):
     variables['timedelta'] = timedelta
     variables['timezone'] = timezone
     variables['timestamp'] = TimeStamp()
+    variables['__recursion_depth__'] = 0
     jinja2env = jinja2envs.get(template_style)
     j2template = jinja2env.from_string(template)
+
+    class TemplateVariable(object):
+        '''Variable may contain template string referencing other variables.'''
+        def __init__(self, value):
+            self.j2template = jinja2env.from_string(value)
+
+        def __bool__(self):
+            return bool(self.__str__())
+
+        def __float__(self):
+            return float(self.__str__())
+
+        def __int__(self):
+            return int(self.__str__())
+
+        def __repr__(self):
+            return self.__str__()
+
+        def __str__(self):
+            if variables['__recursion_depth__'] > MAX_RECURSION_DEPTH:
+                raise RuntimeError("Template variable exceeded max recursion")
+            variables['__recursion_depth__'] += 1
+            ret = self.j2template.render(variables)
+            variables['__recursion_depth__'] -= 1
+            return ret
+
+    for name, value in template_variables.items():
+        variables[name] = TemplateVariable(value) if isinstance(value, str) else value
+
     template_out = j2template.render(variables)
 
     type_filter_match = type_filter_match_re.match(template)
@@ -172,7 +205,7 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}):
         type_filter = type_filter_match.group(1)
         try:
             if type_filter == 'bool':
-                return bool(strtobool(template_out))
+                return bool(str2bool(template_out))
             elif type_filter == 'float':
                 return float(template_out)
             elif type_filter == 'int':
@@ -184,7 +217,22 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}):
     else:
         return template_out
 
-def recursive_process_template_strings(template, template_style='jinja2', variables={}):
+def recursive_process_template_strings(template, template_style='jinja2', variables={}, template_variables={}):
+    """Take a template and recursively process template strings within it.
+    The template may be any type.
+    If it is a dictionary or list then all values will be recursively procesed.
+    Strings will be handled as templates and values replaced by output.
+    If a template string ends in a bool, float, int, or object filter then
+    output will be converted from string to the corresponding type.
+
+    This method is used in various places including generating status summary,
+    validating parameters, checking heath/readiness, and generating resource definitions.
+
+    Keyword arguments:
+    template_style -- Style of templates used. Currently only "jinja2" is supported
+    variables -- simple key/value pair variables
+    template_variables -- variables which may contain template strings and should only come from trusted sources
+    """
     omit = '__omit_place_holder__' + ''.join(random.choices('abcdef0123456789', k=40))
     return __recursive_strip_omit(
         __recursive_process_template_strings(
@@ -192,23 +240,24 @@ def recursive_process_template_strings(template, template_style='jinja2', variab
             template = template,
             template_style = template_style,
             variables = variables,
+            template_variables = template_variables,
         ),
         omit = omit,
     )
 
-def __recursive_process_template_strings(template, omit, template_style, variables):
+def __recursive_process_template_strings(template, omit, template_style, variables, template_variables):
     if isinstance(template, dict):
         return {
-            key: __recursive_process_template_strings(val, omit=omit, template_style=template_style, variables=variables)
+            key: __recursive_process_template_strings(val, omit=omit, template_style=template_style, variables=variables, template_variables=template_variables)
             for key, val in template.items()
         }
     elif isinstance(template, list):
         return [
-            __recursive_process_template_strings(item, omit=omit, template_style=template_style, variables=variables)
+            __recursive_process_template_strings(item, omit=omit, template_style=template_style, variables=variables, template_variables=template_variables)
             for item in template
         ]
     elif isinstance(template, str):
-        return jinja2process(template, omit=omit, template_style=template_style, variables=variables)
+        return jinja2process(template, omit=omit, template_style=template_style, variables=variables, template_variables=template_variables)
     else:
         return template
 
