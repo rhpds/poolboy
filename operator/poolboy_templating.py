@@ -176,7 +176,7 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}, te
             self.j2template = jinja2env.from_string(value)
 
         def __bool__(self):
-            return bool(self.__str__())
+            return str2bool(self.__str__())
 
         def __float__(self):
             return float(self.__str__())

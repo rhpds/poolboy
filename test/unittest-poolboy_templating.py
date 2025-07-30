@@ -480,5 +480,18 @@ class TestJsonPatch(unittest.TestCase):
                 template, 'jinja2', template_variables=template_variables
             ),
 
+    def test_35(self):
+        template = "{{ a | bool }}"
+        template_variables = {
+            "a": "{{ b }}",
+            "b": False,
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            False
+        )
+
 if __name__ == '__main__':
     unittest.main()
