@@ -144,7 +144,7 @@ jinja2envs['jinja2'].filters['to_json'] = lambda x: json.dumps(x)
 #   object_raw:
 #     user:
 #       name: alice
-type_filter_match_re = re.compile(r'^{{(?!.*{{).*\| *(bool|float|int|object) *}}$')
+type_filter_match_re = re.compile(r'^{{(?!.*{{).*\| *(bool|float|int|list|object) *}}$')
 
 def check_condition(condition, template_style='jinja2', variables={}, template_variables={}):
     return jinja2process(
@@ -153,6 +153,26 @@ def check_condition(condition, template_style='jinja2', variables={}, template_v
         variables=variables,
         template_variables=template_variables,
     )
+
+def template_output_typing(template_out, template):
+    '''Convert template output to corresponding type as determined by final filter.'''
+    type_filter_match = type_filter_match_re.match(template)
+    if type_filter_match:
+        type_filter = type_filter_match.group(1)
+        try:
+            if type_filter == 'bool':
+                return bool(str2bool(template_out))
+            elif type_filter == 'float':
+                return float(template_out)
+            elif type_filter == 'int':
+                return int(template_out)
+            elif type_filter == 'list':
+                return json.loads(template_out)
+            elif type_filter == 'object':
+                return json.loads(template_out)
+        except ValueError:
+            pass
+    return template_out
 
 def j2now(utc=False, fmt=None):
     dt = datetime.now(timezone.utc if utc else None)
@@ -173,16 +193,63 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}, te
     class TemplateVariable(object):
         '''Variable may contain template string referencing other variables.'''
         def __init__(self, value):
+            self.template = value
             self.j2template = jinja2env.from_string(value)
+
+        def get_typed_value(self):
+            template_out = self.__str__()
+            return template_output_typing(template_out, self.template)
 
         def __bool__(self):
             return str2bool(self.__str__())
 
+        def __contains__(self, item):
+            return item in self.get_typed_value()
+
+        def __eq__(self, cmp):
+            if isinstance(TemplateVariable, cmp):
+                return self.get_typed_value() == cmp.get_typed_value()
+            else:
+                return self.get_typed_value() == cmp
+
         def __float__(self):
             return float(self.__str__())
 
+        def __ge__(self):
+            if isinstance(TemplateVariable, cmp):
+                return self.get_typed_value() >= cmp.get_typed_value()
+            else:
+                return self.get_typed_value() >= cmp
+
+        def __getattr__(self, key):
+            return self[key]
+
+        def __getitem__(self, key):
+            return self.get_typed_value()[key]
+
+        def __gt__(self):
+            if isinstance(TemplateVariable, cmp):
+                return self.get_typed_value() > cmp.get_typed_value()
+            else:
+                return self.get_typed_value() > cmp
+
         def __int__(self):
             return int(self.__str__())
+
+        def __le__(self):
+            if isinstance(TemplateVariable, cmp):
+                return self.get_typed_value() <= cmp.get_typed_value()
+            else:
+                return self.get_typed_value() <= cmp
+
+        def __lt__(self):
+            if isinstance(TemplateVariable, cmp):
+                return self.get_typed_value() < cmp.get_typed_value()
+            else:
+                return self.get_typed_value() < cmp
+
+        def __ne__(self, cmp):
+            return not self == cmp
 
         def __repr__(self):
             return self.__str__()
@@ -199,23 +266,7 @@ def jinja2process(template, omit=None, template_style='jinja2', variables={}, te
         variables[name] = TemplateVariable(value) if isinstance(value, str) else value
 
     template_out = j2template.render(variables)
-
-    type_filter_match = type_filter_match_re.match(template)
-    if type_filter_match:
-        type_filter = type_filter_match.group(1)
-        try:
-            if type_filter == 'bool':
-                return bool(str2bool(template_out))
-            elif type_filter == 'float':
-                return float(template_out)
-            elif type_filter == 'int':
-                return int(template_out)
-            elif type_filter == 'object':
-                return json.loads(template_out)
-        except ValueError:
-            pass
-    else:
-        return template_out
+    return template_output_typing(template_out, template)
 
 def recursive_process_template_strings(template, template_style='jinja2', variables={}, template_variables={}):
     """Take a template and recursively process template strings within it.

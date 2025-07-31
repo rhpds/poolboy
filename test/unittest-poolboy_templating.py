@@ -493,5 +493,135 @@ class TestJsonPatch(unittest.TestCase):
             False
         )
 
+    def test_36(self):
+        template = "{{ a | int }}"
+        template_variables = {
+            "a": "{{ b.a }}",
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            23
+        )
+
+    def test_37(self):
+        template = "{{ a.a | int }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            23
+        )
+
+    def test_38(self):
+        template = "{{ (a.a > 3) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_39(self):
+        template = "{{ (a.a >= 23) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_40(self):
+        template = "{{ (a.a < 100) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_41(self):
+        template = "{{ (a.a <= 23) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_42(self):
+        template = "{{ (a.a == 23) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_43(self):
+        template = "{{ (a['a'] == 23) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_44(self):
+        template = "{{ ('a' in a) | bool }}"
+        template_variables = {
+            "a": '{{ {"a": b.a} | object }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
+    def test_45(self):
+        template = "{{ ('a' in a) | bool }}"
+        template_variables = {
+            "a": '{{ b.keys() | list }}',
+            "b": {"a": 23},
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, 'jinja2', template_variables=template_variables
+            ),
+            True
+        )
+
 if __name__ == '__main__':
     unittest.main()
