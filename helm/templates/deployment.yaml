@@ -34,6 +34,14 @@ spec:
           {{- if eq .Values.operatorMode "manager" }}
           - name: RESOURCE_HANDLER_COUNT
             value: "{{ .Values.resourceHandlerCount }}"
+          {{- if .Values.resourceHandlerResources }}
+          - name: RESOURCE_HANDLER_RESOURCES
+            value: {{ .Values.resourceHandlerResources | toJson | quote }}
+          {{- end }}
+          {{- if .Values.resourceWatchResources }}
+          - name: RESOURCE_WATCH_RESOURCES
+            value: {{ .Values.resourceWatchResources | toJson | quote }}
+          {{- end }}
           {{- end }}
           - name: RESOURCE_REFRESH_INTERVAL
             value: "{{ .Values.resourceRefreshInterval }}"

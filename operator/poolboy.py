@@ -1,4 +1,5 @@
 import os
+import yaml
 
 from copy import deepcopy
 from uuid import UUID
@@ -43,6 +44,8 @@ class Poolboy():
     resource_requester_preferred_username_annotation = f"{operator_domain}/resource-requester-preferred-username"
     ignore_label = f"{operator_domain}/ignore"
     resource_handler_idx_label = f"{operator_domain}/resource-handler-idx"
+    resource_handler_resources = yaml.safe_load(os.environ['RESOURCE_HANDLER_RESOURCES']) if 'RESOURCE_HANDLER_RESOURCES' in os.environ else None
+    resource_watch_resources = yaml.safe_load(os.environ['RESOURCE_WATCH_RESOURCES']) if 'RESOURCE_WATCH_RESOURCES' in os.environ else None
 
     @classmethod
     async def on_cleanup(cls):
@@ -65,6 +68,7 @@ class Poolboy():
                 )
 
         cls.api_client = kubernetes_asyncio.client.ApiClient()
+        cls.apps_v1_api = kubernetes_asyncio.client.AppsV1Api(cls.api_client)
         cls.core_v1_api = kubernetes_asyncio.client.CoreV1Api(cls.api_client)
         cls.custom_objects_api = kubernetes_asyncio.client.CustomObjectsApi(cls.api_client)
 
@@ -205,9 +209,9 @@ class Poolboy():
         )
         logger.info(f"Manager running in pod {cls.manager_pod.metadata.name}")
         for idx in range(Poolboy.resource_handler_count):
-            pod = kubernetes_asyncio.client.V1Pod(
-                api_version="v1",
-                kind="Pod",
+            replicaset = kubernetes_asyncio.client.V1ReplicaSet(
+                api_version="apps/v1",
+                kind="ReplicaSet",
                 metadata=kubernetes_asyncio.client.V1ObjectMeta(
                     name=f"{cls.manager_pod.metadata.name}-handler-{idx}",
                     namespace=cls.namespace,
@@ -221,27 +225,56 @@ class Poolboy():
                         )
                     ]
                 ),
-                spec=deepcopy(cls.manager_pod.spec),
             )
-            pod.spec.containers[0].env = [
+            replicaset.spec = kubernetes_asyncio.client.V1ReplicaSetSpec(
+                replicas=1,
+                selector=kubernetes_asyncio.client.V1LabelSelector(
+                    match_labels={
+                        "app.kubernetes.io/name": cls.manager_pod.metadata.name,
+                        "app.kubernetes.io/instance": f"handler-{idx}",
+                    },
+                ),
+                template=kubernetes_asyncio.client.V1PodTemplateSpec(
+                    metadata=kubernetes_asyncio.client.V1ObjectMeta(
+                        labels={
+                            "app.kubernetes.io/name": cls.manager_pod.metadata.name,
+                            "app.kubernetes.io/instance": f"handler-{idx}",
+                        },
+                    ),
+                    spec=deepcopy(cls.manager_pod.spec),
+                ),
+            )
+
+            replicaset.spec.template.spec.containers[0].env = [
                 env_var
-                for env_var in pod.spec.containers[0].env
-                if env_var.name != 'OPERATOR_MODE'
+                for env_var in cls.manager_pod.spec.containers[0].env
+                if env_var.name not in {
+                    'OPERATOR_MODE',
+                    'RESOURCE_HANDLER_RESOURCES',
+                    'RESOURCE_WATCH_RESOURCES',
+                }
             ]
-            pod.spec.containers[0].env.append(
+            replicaset.spec.template.spec.containers[0].env.append(
                 kubernetes_asyncio.client.V1EnvVar(
                     name='OPERATOR_MODE',
                     value='resource-handler',
                 )
             )
-            pod.spec.containers[0].env.append(
+            replicaset.spec.template.spec.containers[0].env.append(
                 kubernetes_asyncio.client.V1EnvVar(
                     name='RESOURCE_HANDLER_IDX',
                     value=str(idx),
                 )
             )
-            pod.spec.node_name = None
-            await cls.core_v1_api.create_namespaced_pod(
+            replicaset.spec.template.spec.node_name = None
+            if cls.resource_handler_resources:
+                replicaset.spec.template.spec.containers[0].resources = kubernetes_asyncio.client.V1ResourceRequirements(
+                    limits=cls.resource_handler_resources.get('limits'),
+                    requests=cls.resource_handler_resources.get('requests'),
+                )
+
+            replicaset = await cls.apps_v1_api.create_namespaced_replica_set(
                 namespace=cls.namespace,
-                body=pod,
+                body=replicaset,
             )
+            logger.info(f"Created ReplicaSet {replicaset.metadata.name}")

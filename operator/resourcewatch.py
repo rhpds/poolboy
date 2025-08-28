@@ -362,11 +362,11 @@ class ResourceWatch(KopfObject):
     async def create_pod(self,
         logger: kopf.ObjectLogger,
     ) -> None:
-        pod = kubernetes_asyncio.client.V1Pod(
-            api_version="v1",
-            kind="Pod",
+        replicaset = kubernetes_asyncio.client.V1ReplicaSet(
+            api_version="apps/v1",
+            kind="ReplicaSet",
             metadata=kubernetes_asyncio.client.V1ObjectMeta(
-                generate_name=f"{Poolboy.manager_pod.metadata.name}-watch-{self.name_hash}-",
+                name=f"{Poolboy.manager_pod.metadata.name}-watch-{self.name_hash}",
                 namespace=Poolboy.namespace,
                 owner_references=[
                     kubernetes_asyncio.client.V1OwnerReference(
@@ -378,31 +378,60 @@ class ResourceWatch(KopfObject):
                     )
                 ]
             ),
-            spec=deepcopy(Poolboy.manager_pod.spec),
         )
-        pod.spec.containers[0].env = [
+        replicaset.spec = kubernetes_asyncio.client.V1ReplicaSetSpec(
+            replicas=1,
+            selector=kubernetes_asyncio.client.V1LabelSelector(
+                match_labels={
+                    "app.kubernetes.io/name": Poolboy.manager_pod.metadata.name,
+                    "app.kubernetes.io/instance": f"watch-{self.name_hash}",
+                },
+            ),
+            template=kubernetes_asyncio.client.V1PodTemplateSpec(
+                metadata=kubernetes_asyncio.client.V1ObjectMeta(
+                    labels={
+                        "app.kubernetes.io/name": Poolboy.manager_pod.metadata.name,
+                        "app.kubernetes.io/instance": f"watch-{self.name_hash}",
+                    },
+                ),
+                spec=deepcopy(Poolboy.manager_pod.spec),
+            ),
+        )
+
+        replicaset.spec.template.spec.containers[0].env = [
             env_var
-            for env_var in pod.spec.containers[0].env
-            if env_var.name not in {'OPERATOR_MODE', 'RESOURCE_HANDLER_COUNT'}
+            for env_var in Poolboy.manager_pod.spec.containers[0].env
+            if env_var.name not in {
+                'OPERATOR_MODE',
+                'RESOURCE_HANDLER_COUNT',
+                'RESOURCE_HANDLER_RESOURCES',
+                'RESOURCE_WATCH_RESOURCES',
+            }
         ]
-        pod.spec.containers[0].env.append(
+        replicaset.spec.template.spec.containers[0].env.append(
             kubernetes_asyncio.client.V1EnvVar(
                 name='OPERATOR_MODE',
                 value='resource-watch',
             )
         )
-        pod.spec.containers[0].env.append(
+        replicaset.spec.template.spec.containers[0].env.append(
             kubernetes_asyncio.client.V1EnvVar(
                 name='WATCH_NAME',
                 value=self.name,
             )
         )
-        pod.spec.node_name = None
-        pod = await Poolboy.core_v1_api.create_namespaced_pod(
+        replicaset.spec.template.spec.node_name = None
+        if Poolboy.resource_watch_resources:
+            replicaset.spec.template.spec.containers[0].resources = kubernetes_asyncio.client.V1ResourceRequirements(
+                limits=Poolboy.resource_watch_resources.get('limits'),
+                requests=Poolboy.resource_watch_resources.get('requests'),
+            )
+
+        replicaset = await Poolboy.apps_v1_api.create_namespaced_replica_set(
             namespace=Poolboy.namespace,
-            body=pod,
+            body=replicaset,
         )
-        logger.info(f"Created pod {pod.metadata.name} for {self}")
+        logger.info(f"Created ReplicaSet {replicaset.metadata.name} for {self}")
 
     async def get_resource(self,
         name: str,
