@@ -1,10 +1,11 @@
 import asyncio
-import kopf
-import kubernetes_asyncio
-import pytimeparse
 
 from datetime import timedelta
-from typing import List, Mapping, Optional, TypeVar
+from typing import List, Mapping, TypeVar
+from uuid import UUID
+
+import kopf
+import pytimeparse
 
 import resourcehandle
 import resourceprovider
@@ -68,7 +69,7 @@ class ResourcePool(KopfObject):
             return resource_pool
 
     @classmethod
-    async def unregister(cls, name: str) -> Optional[ResourcePoolT]:
+    async def unregister(cls, name: str) -> ResourcePoolT|None:
         async with cls.class_lock:
             return cls.instances.pop(name, None)
 
@@ -84,6 +85,11 @@ class ResourcePool(KopfObject):
     def has_resource_provider(self) -> bool:
         """Return whether ResourceHandles for this pool are managed by a ResourceProvider."""
         return 'provider' in self.spec
+
+    @property
+    def ignore(self) -> bool:
+        """Return whether this ResourcePool should be ignored"""
+        return Poolboy.ignore_label in self.labels
 
     @property
     def lifespan_default(self) -> int:
@@ -114,7 +120,7 @@ class ResourcePool(KopfObject):
             return timedelta(seconds=seconds)
 
     @property
-    def max_unready(self) -> Optional[int]:
+    def max_unready(self) -> int|None:
         return self.spec.get('maxUnready')
 
     @property
@@ -122,7 +128,12 @@ class ResourcePool(KopfObject):
         return self.spec.get('minAvailable', 0)
 
     @property
-    def resource_provider_name(self) -> Optional[str]:
+    def resource_handler_idx(self) -> int:
+        """Label value used to select which resource handler pod should manage this ResourcePool."""
+        return int(UUID(self.uid)) % Poolboy.resource_handler_count
+
+    @property
+    def resource_provider_name(self) -> str|None:
         return self.spec.get('provider', {}).get('name')
 
     @property
@@ -139,6 +150,16 @@ class ResourcePool(KopfObject):
     def __unregister(self) -> None:
         self.instances.pop(self.name, None)
 
+    async def add_resource_handler_label(self):
+        if self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx):
+            await self.merge_patch({
+                "metadata": {
+                    "labels": {
+                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx)
+                    }
+                }
+            })
+
     async def get_resource_provider(self) -> ResourceProviderT:
         """Return ResourceProvider configured to manage ResourceHandle."""
         return await resourceprovider.ResourceProvider.get(self.resource_provider_name)
@@ -149,6 +170,7 @@ class ResourcePool(KopfObject):
     async def manage(self, logger: kopf.ObjectLogger):
         async with self.lock:
             resource_handles = await resourcehandle.ResourceHandle.get_unbound_handles_for_pool(resource_pool=self, logger=logger)
+
             available_resource_handles = []
             ready_resource_handles = []
             resource_handles_for_status = []
@@ -168,7 +190,7 @@ class ResourcePool(KopfObject):
 
             resource_handle_deficit = self.min_available - len(available_resource_handles)
 
-            if self.max_unready != None:
+            if self.max_unready is not None:
                 unready_count = len(available_resource_handles) - len(ready_resource_handles)
                 if resource_handle_deficit > self.max_unready - unready_count:
                     resource_handle_deficit = self.max_unready - unready_count

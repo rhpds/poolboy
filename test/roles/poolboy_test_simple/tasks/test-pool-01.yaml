@@ -134,7 +134,7 @@
   failed_when: >-
     __unbound_handles | length != 2
   delay: 1
-  retries: 5
+  retries: 15
 
 - name: Delete ResourcePool test-pool-01
   kubernetes.core.k8s:

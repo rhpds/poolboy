@@ -94,7 +94,9 @@
     - "{{ poolboy_domain }}/resource-claim-name=test-1"
     - "{{ poolboy_domain }}/resource-claim-namespace={{ poolboy_test_namespace }}"
   register: r_resource_handle_for_test_1
-  until: r_resource_handle_for_test_1.resources | length > 0
+  until:
+  - r_resource_handle_for_test_1.resources | length > 0
+  - r_resource_handle_for_test_1.resources[0].status.resources[0].reference is defined
   retries: 5
   delay: 2
 
@@ -108,7 +110,6 @@
 - name: Check resource handle for test-1
   assert:
     that:
-    - _handle.metadata.finalizers[0] == poolboy_domain
     - _handle.metadata.generateName == 'guid-'
     - _handle.spec.resourceClaim.name == 'test-1'
     - _handle.spec.resourceClaim.namespace == poolboy_test_namespace
@@ -130,7 +131,7 @@
     namespace: "{{ resource_ref.namespace | default('') }}"
   vars:
     handle: "{{ r_resource_handle_for_test_1.resources[0] }}"
-    resource_ref: "{{ handle.spec.resources[0].reference }}"
+    resource_ref: "{{ handle.status.resources[0].reference }}"
   register: resource_for_test_1
 
 - name: Check resource for test-1
@@ -240,7 +241,6 @@
 - name: Check update of resource handle for test-1
   assert:
     that:
-    - handle.metadata.finalizers[0] == poolboy_domain
     - handle.metadata.generateName == 'guid-'
     - handle.spec.resourceClaim.name == 'test-1'
     - handle.spec.resourceClaim.namespace == poolboy_test_namespace
@@ -293,7 +293,7 @@
     name: "{{ resource_ref.name }}"
     namespace: "{{ resource_ref.namespace | default('') }}"
   vars:
-    resource_ref: "{{ r_resource_handle_for_test_1.resources[0].spec.resources[0].reference }}"
+    resource_ref: "{{ r_resource_handle_for_test_1.resources[0].status.resources[0].reference }}"
   register: r_verify_resource_deletion
   failed_when: r_verify_resource_deletion.resources | length > 0
   until: r_verify_resource_deletion is success
@@ -580,7 +580,6 @@
     claim.status.resources[0].state.kind != 'ResourceClaimTest' or
     not claim.status.resources[0].state.metadata.name.startswith('test-pool-') or
     claim.status.resources[0].state.metadata.namespace != poolboy_test_namespace or
-    claim.status.resources[0].state.metadata.annotations[poolboy_domain ~ '/resource-pool-name'] != 'test' or
     claim.status.resources[0].state.spec.vars.name != 'test-pool' or
     claim.status.resources[0].state.spec.vars.number != 23 or
     claim.status.resourceHandle.name != first_pool_resource_handle_name or

@@ -80,8 +80,8 @@
       {{ r_get_resource_handles.resources | json_query('[?spec.resourceClaim==null]') }}
   failed_when: >-
     __unbound_handles | length != 2 or
-    __unbound_handles[0].spec.resources is undefined or
-    __unbound_handles[0].spec.resources[0].reference is undefined
+    __unbound_handles[0].status.resources is undefined or
+    __unbound_handles[0].status.resources[0].reference is undefined
   until: r_get_resource_handles is success
   delay: 1
   retries: 10
@@ -91,7 +91,7 @@
     __state: >-
       {{ r_get_resource_handles.resources[0] }}
   set_fact:
-    resource_claim_test_name: "{{ __state.spec.resources[0].reference.name }}"
+    resource_claim_test_name: "{{ __state.status.resources[0].reference.name }}"
 
 - name: Verify creation of ResourceClaimTest for test-pool-03
   kubernetes.core.k8s_info:
@@ -171,6 +171,9 @@
       {{ r_get_resource_handles.resources | json_query('[?spec.resourceClaim==null]') }}
   failed_when: >-
     __unbound_handles | length != 2
+  retries: 5
+  delay: 1
+  until: r_get_resource_handles is successful
 
 - name: Create ResourceClaim test-pool-03-no-parameters
   kubernetes.core.k8s:

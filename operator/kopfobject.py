@@ -1,7 +1,7 @@
 import asyncio
 
 from datetime import datetime, timezone
-from typing import List, Mapping, Optional, TypeVar, Union
+from typing import List, Mapping, TypeVar
 
 import kopf
 import kubernetes_asyncio
@@ -9,14 +9,27 @@ import kubernetes_asyncio
 from poolboy import Poolboy
 
 class KopfObject:
+    @classmethod
+    def from_definition(cls, definition):
+        return cls(
+            annotations=definition['metadata'].get('annotations', {}),
+            labels=definition['metadata'].get('labels', {}),
+            meta=definition['metadata'],
+            name=definition['metadata']['name'],
+            namespace=definition['metadata']['namespace'],
+            spec=definition['spec'],
+            status=definition.get('status', {}),
+            uid=definition['metadata']['uid'],
+        )
+
     def __init__(self,
-        annotations: Union[kopf.Annotations, Mapping],
-        labels: Union[kopf.Labels, Mapping],
-        meta: Union[kopf.Meta, Mapping],
+        annotations: kopf.Annotations|Mapping,
+        labels: kopf.Labels|Mapping,
+        meta: kopf.Meta|Mapping,
         name: str,
         namespace: str,
-        spec: Union[kopf.Spec, Mapping],
-        status: Union[kopf.Status, Mapping],
+        spec: kopf.Spec|Mapping,
+        status: kopf.Status|Mapping,
         uid: str,
     ):
         self.annotations = annotations
@@ -45,7 +58,7 @@ class KopfObject:
         return self.meta['creationTimestamp']
 
     @property
-    def deletion_timestamp(self) -> Optional[str]:
+    def deletion_timestamp(self) -> str|None:
         return self.meta.get('deletionTimestamp')
 
     @property

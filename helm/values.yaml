@@ -20,10 +20,13 @@ operatorDomain:
   # If not set and create is true, a name is generated using the operatorDomain template
   name:
 
+operatorMode: manager
+
 manageClaimsInterval: 60
 manageHandlesInterval: 60
 managePoolsInterval: 10
 resourceRefreshInterval: 600
+resourceHandlerCount: 3
 
 anarchy:
   # Control whether anarchy integration should be created

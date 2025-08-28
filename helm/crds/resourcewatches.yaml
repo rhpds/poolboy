@@ -1,0 +1,80 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: resourcewatches.poolboy.gpte.redhat.com
+spec:
+  group: poolboy.gpte.redhat.com
+  scope: Namespaced
+  names:
+    plural: resourcewatches
+    singular: resourcewatch
+    kind: ResourceWatch
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    additionalPrinterColumns:
+    - name: Watch Namespace
+      type: string
+      jsonPath: .spec.namespace
+    - name: Api Version
+      type: string
+      jsonPath: .spec.apiVersion
+    - name: Kind
+      type: string
+      jsonPath: .spec.kind
+    schema:
+      openAPIV3Schema:
+        description: >-
+          ResourceWatches describe how to watch resources managed by poolboy.
+        type: object
+        required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: >-
+              Specification for the ResourceWatch which configures which resources to watch in which namespaces.
+            type: object
+            properties:
+              apiVersion:
+                type: string
+              kind:
+                type: string
+              namespace:
+                type: string
+              refreshInterval:
+                type: string
+                pattern: '^\d+[ms]$'
+            required:
+            - apiVersion
+            - kind
+          status:
+            description: ResourceHandle status
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+            properties:
+              diffBase:
+                description: Kopf diffbase
+                type: string
+              kopf:
+                description: Kopf status
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              pod:
+                type: object
+                properties:
+                  name:
+                    type: string
+    selectableFields:
+    - jsonPath: .spec.apiVersion
+    - jsonPath: .spec.kind
+    - jsonPath: .spec.namespace

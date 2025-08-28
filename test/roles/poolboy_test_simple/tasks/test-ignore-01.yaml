@@ -327,11 +327,6 @@
             kind: ResourceProvider
             name: test-ignore-01
             namespace: "{{ poolboy_namespace }}"
-          reference:
-            apiVersion: "{{ poolboy_domain }}/v1"
-            kind: ResourceClaimTest
-            name: test-ignore-01-abcde
-            namespace: "{{ poolboy_test_namespace }}"
           template:
             spec:
               stringvalue: one
@@ -379,12 +374,6 @@
                 "kind": "ResourceProvider",
                 "name": "test-ignore-01",
                 "namespace": "{{ poolboy_namespace }}"
-              },
-              "reference": {
-                "apiVersion": "{{ poolboy_domain }}/v1",
-                "kind": "ResourceClaimTest",
-                "name":" test-ignore-01-abcde",
-                "namespace": "{{ poolboy_test_namespace }}"
               },
               "template": {
                 "spec": {

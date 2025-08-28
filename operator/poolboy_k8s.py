@@ -3,7 +3,7 @@ import inflection
 import kopf
 import kubernetes_asyncio
 
-from typing import List, Mapping, Optional
+from typing import List, Mapping
 
 from poolboy import Poolboy
 
@@ -68,7 +68,7 @@ async def create_namespaced_core_object(definition: Mapping) -> Mapping:
 async def delete_core_object(
     kind: str,
     name: str,
-    namespace: Optional[str] = None,
+    namespace: str|None = None,
 ) -> Mapping:
     if namespace:
         return await delete_namespaced_core_object(
@@ -112,8 +112,8 @@ async def delete_custom_object(
     version: str,
     kind: str,
     name: str,
-    namespace: Optional[str] = None,
-) -> Optional[Mapping]:
+    namespace: str|None = None,
+) -> Mapping|None:
     plural = await kind_to_plural(group=group, kind=kind, version=version)
     if namespace:
         return await Poolboy.custom_objects_api.delete_namespaced_custom_object(
@@ -136,7 +136,7 @@ async def delete_object(
     kind: str,
     name: str,
     namespace: str = None,
-) -> Optional[Mapping]:
+) -> Mapping|None:
     if '/' in api_version:
         group, version = api_version.split('/')
         return await delete_custom_object(
@@ -157,8 +157,8 @@ async def get_object(
     api_version: str,
     kind: str,
     name: str,
-    namespace: Optional[str] = None,
-) -> Optional[Mapping]:
+    namespace: str|None = None,
+) -> Mapping|None:
     if '/' in api_version:
         group, version = api_version.split('/')
         return await get_custom_object(
@@ -178,7 +178,7 @@ async def get_object(
 async def get_core_object(
     kind: str,
     name: str,
-    namespace: Optional[str] = None,
+    namespace: str|None = None,
 ) -> Mapping:
     if namespace:
         return await get_namespaced_core_object(
@@ -222,8 +222,8 @@ async def get_custom_object(
     version: str,
     kind: str,
     name: str,
-    namespace: Optional[str] = None,
-) -> Optional[Mapping]:
+    namespace: str|None = None,
+) -> Mapping|None:
     plural = await kind_to_plural(group=group, kind=kind, version=version)
     if namespace:
         return await Poolboy.custom_objects_api.get_namespaced_custom_object(
@@ -241,7 +241,7 @@ async def get_custom_object(
             version = version,
         )
 
-async def get_requester_from_namespace(namespace: str) -> tuple[Optional[Mapping], Optional[List[Mapping]]]:
+async def get_requester_from_namespace(namespace: str) -> tuple[Mapping|None, List[Mapping]|None]:
     try:
         namespace_obj = await Poolboy.core_v1_api.read_namespace(namespace)
     except kubernetes_asyncio.client.exceptions.ApiException as e:
@@ -425,8 +425,8 @@ async def patch_object(
     api_version: str,
     kind: str,
     name: str,
+    namespace: str,
     patch: List[Mapping],
-    namespace: Optional[str] = None,
 ) -> List:
     if '/' in api_version:
         group, version = api_version.split('/')
