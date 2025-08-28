@@ -72,8 +72,8 @@
       {{ r_get_resource_handles.resources | json_query('[?spec.resourceClaim==null]') }}
   failed_when: >-
     __unbound_handles | length != 1 or
-    __unbound_handles[0].spec.resources is undefined or
-    __unbound_handles[0].spec.resources[0].reference is undefined or
+    __unbound_handles[0].status.resources is undefined or
+    __unbound_handles[0].status.resources[0].reference is undefined or
     __unbound_handles[0].status.ready != false or
     __unbound_handles[0].status.healthy != false or
     __unbound_handles[0].status.resources[0].ready != false or
@@ -88,7 +88,7 @@
       {{ r_get_resource_handles.resources[0] }}
   set_fact:
     failed_resource_handle_name: "{{ __state.metadata.name }}"
-    resource_claim_test_name: "{{ __state.spec.resources[0].reference.name }}"
+    resource_claim_test_name: "{{ __state.status.resources[0].reference.name }}"
 
 - name: Create ResourceClaim test-pool-04
   kubernetes.core.k8s:
@@ -161,8 +161,8 @@
       {{ r_get_resource_handles.resources | json_query('[?spec.resourceClaim==null]') }}
   failed_when: >-
     __unbound_handles | length != 1 or
-    __unbound_handles[0].spec.resources is undefined or
-    __unbound_handles[0].spec.resources[0].reference is undefined or
+    __unbound_handles[0].status.resources is undefined or
+    __unbound_handles[0].status.resources[0].reference is undefined or
     __unbound_handles[0].status.ready != false or
     __unbound_handles[0].status.healthy != true or
     __unbound_handles[0].status.resources[0].ready != false or

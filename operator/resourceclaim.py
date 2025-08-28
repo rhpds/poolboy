@@ -1,25 +1,44 @@
 import asyncio
-import jsonschema
-import kopf
-import kubernetes_asyncio
 
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import List, Mapping, Optional, TypeVar, Union
+from typing import List, Mapping, TypeVar
+
+import kopf
+import kubernetes_asyncio
 
 from deep_merge import deep_merge
-from jsonpatch_from_diff import jsonpatch_from_diff
 from kopfobject import KopfObject
 from poolboy import Poolboy
 from poolboy_templating import recursive_process_template_strings
 
 import resourcehandle
-import resourcepool
 import resourceprovider
 
 ResourceClaimT = TypeVar('ResourceClaimT', bound='ResourceClaim')
 ResourceHandleT = TypeVar('ResourceHandleT', bound='ResourceHandle')
 ResourceProviderT = TypeVar('ResourceProviderT', bound='ResourceProvider')
+
+def prune_k8s_resource(resource: Mapping) -> Mapping:
+    ret = {
+        key: value
+        for key, value in resource.items()
+        if key != "metadata"
+    }
+    ret["metadata"] = {
+        key: value
+        for key, value in resource['metadata'].items()
+        if key not in {'annotations', 'managedFields'}
+    }
+    if 'annotations' in resource['metadata']:
+        filtered_annotations = {
+            key: value
+            for key, value in resource['metadata']['annotations'].items()
+            if not key.startswith(f"{Poolboy.operator_domain}/")
+        }
+        if filtered_annotations:
+            ret["metadata"]["annotations"] = filtered_annotations
+    return ret
 
 class ResourceClaim(KopfObject):
     api_group = Poolboy.operator_domain
@@ -52,15 +71,16 @@ class ResourceClaim(KopfObject):
         return resource_claim
 
     @classmethod
-    async def get(cls, name: str, namespace: str) -> ResourceClaimT:
+    async def get(cls, name: str, namespace: str, use_cache: bool=True) -> ResourceClaimT:
         async with cls.class_lock:
-            resource_claim = cls.instances.get((namespace, name))
-            if resource_claim:
-                return resource_claim
+            if use_cache and (namespace, name) in cls.instances:
+                return cls.instances[(namespace, name)]
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
                 Poolboy.operator_domain, Poolboy.operator_version, namespace, 'resourceclaims', name
             )
-            return cls.__register_definition(definition=definition)
+            if use_cache:
+                return cls.__register_definition(definition)
+            return cls.from_definition(definition)
 
     @classmethod
     async def register(
@@ -108,22 +128,22 @@ class ResourceClaim(KopfObject):
             return cls.__register_definition(definition=definition)
 
     @classmethod
-    async def unregister(cls, name: str, namespace: str) -> Optional[ResourceClaimT]:
+    async def unregister(cls, name: str, namespace: str) -> ResourceClaimT|None:
         async with cls.class_lock:
             return cls.instances.pop((namespace, name), None)
 
     @property
-    def approval_state(self) -> Optional[str]:
+    def approval_state(self) -> str|None:
         """Return approval state of this ResourceClaim."""
         return self.status.get('approval', {}).get('state')
 
     @property
-    def auto_delete_when(self) -> Optional[str]:
+    def auto_delete_when(self) -> str|None:
         """Return condition which triggers automatic delete if defined."""
         return self.spec.get('autoDelete', {}).get('when')
 
     @property
-    def auto_detach_when(self) -> Optional[str]:
+    def auto_detach_when(self) -> str|None:
         """Return condition which triggers automatic detach if defined."""
         return self.spec.get('autoDetach', {}).get('when')
 
@@ -160,6 +180,7 @@ class ResourceClaim(KopfObject):
 
     @property
     def ignore(self) -> bool:
+        """Return whether this ResourceClaim should be ignored"""
         return Poolboy.ignore_label in self.labels
 
     @property
@@ -176,7 +197,7 @@ class ResourceClaim(KopfObject):
         return self.status.get('resourceHandle', {}).get('detached', False)
 
     @property
-    def lifespan_end_datetime(self) -> Optional[datetime]:
+    def lifespan_end_datetime(self) -> datetime|None:
         """Return datetime object representing when this ResourceClaim will be automatically deleted.
         Return None if lifespan end is not set.
         """
@@ -185,7 +206,7 @@ class ResourceClaim(KopfObject):
             return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
 
     @property
-    def lifespan_end_timestamp(self) -> Optional[str]:
+    def lifespan_end_timestamp(self) -> str|None:
         """Return timestamp representing when this ResourceClaim will be automatically deleted.
         Return None if lifespan end is not set.
         """
@@ -194,38 +215,38 @@ class ResourceClaim(KopfObject):
             return lifespan.get('end')
 
     @property
-    def lifespan_first_ready_datetime(self) -> Optional[datetime]:
+    def lifespan_first_ready_datetime(self) -> datetime|None:
         timestamp = self.lifespan_first_ready_timestamp
         if timestamp:
             return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
 
     @property
-    def lifespan_first_ready_timestamp(self) -> Optional[str]:
+    def lifespan_first_ready_timestamp(self) -> str|None:
         timestamp = self.status.get('lifespan', {}).get('firstReady')
         if timestamp:
             return timestamp
 
     @property
-    def lifespan_maximum(self) -> Optional[str]:
+    def lifespan_maximum(self) -> str|None:
         lifespan = self.status.get('lifespan')
         if lifespan:
             return lifespan.get('maximum')
 
     @property
-    def lifespan_relative_maximum(self) -> Optional[str]:
+    def lifespan_relative_maximum(self) -> str|None:
         lifespan = self.status.get('lifespan')
         if lifespan:
             return lifespan.get('relativeMaximum')
 
     @property
-    def lifespan_start_datetime(self) -> Optional[datetime]:
+    def lifespan_start_datetime(self) -> datetime|None:
         """Return datetime when lifespan of ResourceClaim started or is requested to start."""
         timestamp = self.lifespan_start_timestamp
         if timestamp:
             return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
 
     @property
-    def lifespan_start_timestamp(self) -> Optional[str]:
+    def lifespan_start_timestamp(self) -> str|None:
         """Return timestamp when lifespan of ResourceClaim started or is requested to start."""
         timestamp = self.status.get('lifespan', {}).get('start')
         if timestamp:
@@ -246,7 +267,7 @@ class ResourceClaim(KopfObject):
             return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
 
     @property
-    def requested_lifespan_end_timestamp(self) -> Optional[str]:
+    def requested_lifespan_end_timestamp(self) -> str|None:
         lifespan = self.spec.get('lifespan')
         if lifespan:
             return lifespan.get('end')
@@ -281,7 +302,7 @@ class ResourceClaim(KopfObject):
         return self.resource_provider_name_from_status or self.resource_provider_name_from_spec
 
     @property
-    def resource_provider_name_from_status(self) -> Optional[str]:
+    def resource_provider_name_from_status(self) -> str|None:
         """Return name of managing ResourceProvider from ResourceClaim status."""
         return self.status.get('provider', {}).get('name')
 
@@ -426,21 +447,21 @@ class ResourceClaim(KopfObject):
 
     async def update_status_from_handle(self,
         logger: kopf.ObjectLogger,
-        resource_handle: ResourceHandleT
+        resource_handle: ResourceHandleT,
+        resource_states: List[Mapping]|None=None,
     ) -> None:
         async with self.lock:
+            logger.debug(f"Updating {self} from {resource_handle}")
             patch = []
 
             # Reset lifespan from default on first ready
             if resource_handle.is_ready and not self.lifespan_first_ready_timestamp:
-                logger.info(f"{self} is first ready")
                 lifespan_default_timedelta = resource_handle.get_lifespan_default_timedelta(resource_claim=self)
                 if lifespan_default_timedelta:
-                    logger.info(f"{self} has lifespan_default_timedelta")
                     # Adjust requested end if unchanged from default
                     if not self.requested_lifespan_end_datetime \
                     or lifespan_default_timedelta == self.requested_lifespan_end_datetime - self.lifespan_start_datetime:
-                        logger.info(f"Setting requested lifespan end")
+                        logger.info(f"Resetting default lifespan end on first ready")
                         await self.set_requested_lifespan_end(
                             datetime.now(timezone.utc) + lifespan_default_timedelta
                         )
@@ -510,16 +531,22 @@ class ResourceClaim(KopfObject):
                         "path": "/status/lifespan/relativeMaximum",
                     })
 
-            resource_states = await resource_handle.get_resource_states(logger=logger)
             for resource_index, status_resource in enumerate(resource_handle.status_resources):
+                current_entry = self.status['resources'][resource_index]
                 resource_entry = {
                     "provider": resource_handle.resources[resource_index]['provider'],
                     **status_resource,
                 }
-                if 'validationError' in self.status['resources'][resource_index]:
-                    resource_entry['validationError'] = self.status['resources'][resource_index]['validationError']
-                if resource_states[resource_index]:
-                    resource_entry['state'] = resource_states[resource_index]
+                if 'validationError' in current_entry:
+                    resource_entry['validationError'] = current_entry['validationError']
+                if resource_states:
+                    if resource_index < len(resource_states) and resource_states[resource_index] is not None:
+                        resource_entry['state'] = prune_k8s_resource(
+                            resource_states[resource_index]
+                        )
+                elif 'state' in current_entry:
+                    resource_entry['state'] = current_entry['state']
+
                 if resource_entry != self.status['resources'][resource_index]:
                     patch.append({
                         "op": "replace",
@@ -551,6 +578,8 @@ class ResourceClaim(KopfObject):
                     logger.info(
                         f"Attempt to update status from {resource_handle} on deleted {self}"
                     )
+                elif exception.status == 422:
+                    logger.warning(f"Failed to apply patch {patch} to {self}")
                 else:
                     raise
 
@@ -603,7 +632,7 @@ class ResourceClaim(KopfObject):
             } for idx, provider in enumerate(providers)]
         })
 
-        logger.info(
+        logger.debug(
             f"Assigned ResourceProviders {', '.join([p.name for p in providers])} "
             f"to ResourceClaim {self.name} in {self.namespace}"
         )
@@ -623,7 +652,7 @@ class ResourceClaim(KopfObject):
         """Return ResourceProvider configured to manage ResourceClaim."""
         return await resourceprovider.ResourceProvider.get(self.resource_provider_name)
 
-    async def get_resource_providers(self, resources:Optional[List[Mapping]]=None) -> List[ResourceProviderT]:
+    async def get_resource_providers(self, resources:List[Mapping]|None=None) -> List[ResourceProviderT]:
         """Return list of ResourceProviders assigned to each resource entry of ResourceClaim."""
         resource_providers = []
         if resources == None:
@@ -634,7 +663,7 @@ class ResourceClaim(KopfObject):
             )
         return resource_providers
 
-    async def get_resources_from_provider(self, resource_handle: Optional[ResourceHandleT]=None) -> List[Mapping]:
+    async def get_resources_from_provider(self, resource_handle: ResourceHandleT|None=None) -> List[Mapping]:
         """Return resources for this claim as defined by ResourceProvider"""
         resource_provider = await self.get_resource_provider()
         return await resource_provider.get_resources(
@@ -786,6 +815,8 @@ class ResourceClaim(KopfObject):
                     logger = logger,
                     resource_claim_resources = resource_claim_resources,
                 )
+            if resource_handle.ignore:
+                return
 
             if self.check_auto_delete(logger=logger, resource_handle=resource_handle, resource_provider=resource_provider):
                 logger.info(f"auto-delete of {self} triggered")
@@ -806,7 +837,7 @@ class ResourceClaim(KopfObject):
     async def __manage_resource_handle(self,
         logger: kopf.ObjectLogger,
         resource_claim_resources: List[Mapping],
-        resource_handle: Optional[ResourceHandleT],
+        resource_handle: ResourceHandleT|None,
     ) -> None:
         patch = []
 
@@ -893,7 +924,7 @@ class ResourceClaim(KopfObject):
         if patch:
             await resource_handle.json_patch(patch)
 
-    async def refetch(self) -> Optional[ResourceClaimT]:
+    async def refetch(self) -> ResourceClaimT|None:
         try:
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
                 Poolboy.operator_domain, Poolboy.operator_version, self.namespace, 'resourceclaims', self.name
@@ -904,12 +935,11 @@ class ResourceClaim(KopfObject):
             if e.status == 404:
                 self.unregister(name=self.name, namespace=self.namespace)
                 return None
-            else:
-                raise
+            raise
 
     async def validate(self,
         logger: kopf.ObjectLogger,
-        resource_handle: Optional[ResourceHandleT]
+        resource_handle: ResourceHandleT|None
     ) -> None:
         if self.has_resource_provider:
             await self.validate_with_provider(logger=logger, resource_handle=resource_handle)
@@ -918,7 +948,7 @@ class ResourceClaim(KopfObject):
 
     async def validate_resources(self,
         logger: kopf.ObjectLogger,
-        resource_handle: Optional[ResourceHandleT]
+        resource_handle: ResourceHandleT|None
     ) -> None:
         """Validate ResourceClaim with explicit list of resources.
         Patch status with failure details if validation fails.
@@ -955,7 +985,7 @@ class ResourceClaim(KopfObject):
 
     async def validate_with_provider(self,
         logger: kopf.ObjectLogger,
-        resource_handle: Optional[ResourceHandleT]
+        resource_handle: ResourceHandleT|None
     ) -> None:
         """Validate ResourceClaim using its ResourceProvider.
         Patch status with failure details if validation fails.
@@ -969,8 +999,7 @@ class ResourceClaim(KopfObject):
                     f"ResourceProvider {self.resource_provider_name} not found.",
                     delay=600
                 )
-            else:
-                raise
+            raise
 
         validation_errors = []
         vars_ = {
@@ -988,14 +1017,14 @@ class ResourceClaim(KopfObject):
             if parameter.name not in parameter_values:
                 if parameter_states and parameter.name in parameter_states:
                     parameter_values[parameter.name] = parameter_states[parameter.name]
-                elif parameter.default_template != None:
+                elif parameter.default_template is not None:
                     parameters_from_defaults.add(parameter.name)
                     parameter_values[parameter.name] = recursive_process_template_strings(
                         parameter.default_template,
                         variables = { **vars_, **parameter_values },
                         template_variables = {**resource_provider.vars, **resource_handle_vars},
                     )
-                elif parameter.default_value != None:
+                elif parameter.default_value is not None:
                     parameters_from_defaults.add(parameter.name)
                     parameter_values[parameter.name] = parameter.default_value
 
@@ -1004,7 +1033,7 @@ class ResourceClaim(KopfObject):
             parameter_names.add(parameter.name)
             if parameter.name in parameter_values:
                 value = parameter_values[parameter.name]
-                if parameter_states != None:
+                if parameter_states is not None:
                     if value == parameter_states.get(parameter.name):
                         # Unchanged from current state is automatically considered valid
                         # even if validation rules have changed.

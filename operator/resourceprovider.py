@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import timedelta
 from openapi_schema_validator import OAS30Validator
 from openapi_schema_util import defaults_from_schema
-from typing import List, Mapping, Optional, TypeVar
+from typing import List, Mapping, TypeVar
 
 import poolboy_k8s
 
@@ -74,10 +74,10 @@ class _LinkedResourceProvider:
         )
 
     def check_when(self,
-        parameter_values: Optional[Mapping] = None,
-        resource_claim: Optional[ResourceClaimT] = None,
-        resource_handle: Optional[ResourceHandleT] = None,
-        resource_provider: Optional[ResourceProviderT] = None,
+        parameter_values: Mapping|None = None,
+        resource_claim: ResourceClaimT|None = None,
+        resource_handle: ResourceHandleT|None = None,
+        resource_provider:ResourceProviderT|None = None,
     ) -> bool:
         if not self.when:
             return True
@@ -214,17 +214,17 @@ class ResourceProvider:
             resource_provider = cls.instances.get(name)
             if resource_provider:
                 resource_provider.__init__(definition=definition)
-                logger.info(f"Refreshed definition of ResourceProvider {name}")
+                logger.debug(f"Refreshed definition of ResourceProvider {name}")
             else:
                 resource_provider = cls.__register_definition(definition=definition)
-                logger.info(f"Registered ResourceProvider {name}")
+                logger.debug(f"Registered ResourceProvider {name}")
             return resource_provider
 
     @classmethod
-    async def unregister(cls, name: str, logger: kopf.ObjectLogger) -> Optional[ResourceProviderT]:
+    async def unregister(cls, name: str, logger: kopf.ObjectLogger) -> ResourceProviderT|None:
         async with cls.lock:
             if name in cls.instances:
-                logger.info(f"Unregistered ResourceProvider {name}")
+                logger.debug(f"Unregistered ResourceProvider {name}")
                 return cls.instances.pop(name)
 
     def __init__(self, definition: Mapping) -> None:
@@ -269,11 +269,11 @@ class ResourceProvider:
         return self.spec.get('lifespan', {}).get('default')
 
     @property
-    def lifespan_maximum(self) -> Optional[str]:
+    def lifespan_maximum(self) -> str|None:
         return self.spec.get('lifespan', {}).get('maximum')
 
     @property
-    def lifespan_relative_maximum(self) -> Optional[str]:
+    def lifespan_relative_maximum(self) -> str|None:
         return self.spec.get('lifespan', {}).get('relativeMaximum')
 
     @property
@@ -347,7 +347,7 @@ class ResourceProvider:
         return self.spec.get('resourceRequiresClaim', False)
 
     @property
-    def status_summary_template(self) -> Optional[Mapping]:
+    def status_summary_template(self) -> Mapping|None:
         return self.spec.get('statusSummaryTemplate')
 
     @property
@@ -434,7 +434,7 @@ class ResourceProvider:
         logger: kopf.ObjectLogger,
         resource_handle: ResourceHandleT,
         resource_state: Mapping,
-    ) -> Optional[bool]:
+    ) -> bool|None:
         if 'healthCheck' not in self.spec:
             return None
         try:
@@ -454,7 +454,7 @@ class ResourceProvider:
         logger: kopf.ObjectLogger,
         resource_handle: ResourceHandleT,
         resource_state: Mapping,
-    ) -> Optional[bool]:
+    ) -> bool|None:
         if 'readinessCheck' not in self.spec:
             return None
         try:
@@ -473,7 +473,7 @@ class ResourceProvider:
     def check_template_match(self,
         claim_resource_template: Mapping,
         handle_resource_template: Mapping,
-    ) -> Optional[List[Mapping]]:
+    ) -> List[Mapping]|None:
         """
         Check if a resource in a handle matches a resource in a claim.
         Returns a jsondiff of any allowed differences on match or None otherwise.
@@ -494,13 +494,13 @@ class ResourceProvider:
                 return None
         return patch
 
-    def get_lifespan_default_timedelta(self, resource_claim=None) -> Optional[int]:
+    def get_lifespan_default_timedelta(self, resource_claim=None) -> int|None:
         return self.__lifespan_value_as_timedelta('default', resource_claim)
 
-    def get_lifespan_maximum_timedelta(self, resource_claim=None) -> Optional[int]:
+    def get_lifespan_maximum_timedelta(self, resource_claim=None) -> int|None:
         return self.__lifespan_value_as_timedelta('maximum', resource_claim)
 
-    def get_lifespan_relative_maximum_timedelta(self, resource_claim=None) -> Optional[int]:
+    def get_lifespan_relative_maximum_timedelta(self, resource_claim=None) -> int|None:
         return self.__lifespan_value_as_timedelta('relativeMaximum', resource_claim)
 
     def get_parameters(self) -> List[_Parameter]:
@@ -509,10 +509,10 @@ class ResourceProvider:
         ]
 
     async def get_resources(self,
-        parameter_values: Optional[Mapping] = None,
-        resource_claim: Optional[ResourceClaimT] = None,
-        resource_handle: Optional[ResourceHandleT] = None,
-        resource_name: Optional[str] = None,
+        parameter_values: Mapping|None = None,
+        resource_claim: ResourceClaimT|None = None,
+        resource_handle: ResourceHandleT|None = None,
+        resource_name: str|None = None,
     ) -> List[Mapping]:
         """Return list of resources for ResourceClaim and/or ResourceHandle"""
         resources = []
@@ -606,7 +606,7 @@ class ResourceProvider:
     def processed_template(self,
         parameter_values: Mapping,
         resource_claim: ResourceClaimT,
-        resource_handle: Optional[ResourceHandleT],
+        resource_handle: ResourceHandleT|None,
     ) -> Mapping:
         resource_handle_vars = resource_handle.vars if resource_handle else {}
         return recursive_process_template_strings(
@@ -624,8 +624,8 @@ class ResourceProvider:
 
     def validate_resource_template(self,
         template: Mapping,
-        resource_claim: Optional[ResourceClaimT],
-        resource_handle: Optional[ResourceHandleT],
+        resource_claim: ResourceClaimT|None,
+        resource_handle: ResourceHandleT|None,
     ) -> None:
         if self.resource_template_validator:
             self.resource_template_validator.validate(template)
@@ -654,10 +654,10 @@ class ResourceProvider:
 
     async def resource_definition_from_template(self,
         logger: kopf.ObjectLogger,
-        resource_claim: Optional[ResourceClaimT],
+        resource_claim: ResourceClaimT|None,
         resource_handle: ResourceHandleT,
         resource_index: int,
-        resource_states: List[Optional[Mapping]],
+        resource_states: List[Mapping|None],
         vars_: Mapping,
     ):
         if resource_claim:
@@ -744,36 +744,36 @@ class ResourceProvider:
             resource_definition['metadata']['annotations'] = {}
 
         resource_definition['metadata']['annotations'].update({
-            f"{Poolboy.operator_domain}/resource-provider-name": self.name,
-            f"{Poolboy.operator_domain}/resource-provider-namespace": self.namespace,
-            f"{Poolboy.operator_domain}/resource-handle-name": resource_handle.name,
-            f"{Poolboy.operator_domain}/resource-handle-namespace": resource_handle.namespace,
-            f"{Poolboy.operator_domain}/resource-handle-uid": resource_handle.uid,
-            f"{Poolboy.operator_domain}/resource-index": str(resource_index)
+            Poolboy.resource_provider_name_annotation: self.name,
+            Poolboy.resource_provider_namespace_annotation: self.namespace,
+            Poolboy.resource_handle_name_annotation: resource_handle.name,
+            Poolboy.resource_handle_namespace_annotation: resource_handle.namespace,
+            Poolboy.resource_handle_uid_annotation: resource_handle.uid,
+            Poolboy.resource_index_annotation: str(resource_index)
         })
 
         if resource_claim:
             resource_definition['metadata']['annotations'].update({
-                f"{Poolboy.operator_domain}/resource-claim-name": resource_claim.name,
-                f"{Poolboy.operator_domain}/resource-claim-namespace": resource_claim.namespace,
+                Poolboy.resource_claim_name_annotation: resource_claim.name,
+                Poolboy.resource_claim_namespace_annotation: resource_claim.namespace,
             })
 
         if resource_handle.resource_pool_name:
             resource_definition['metadata']['annotations'].update({
-                f"{Poolboy.operator_domain}/resource-pool-name": resource_handle.resource_pool_name,
-                f"{Poolboy.operator_domain}/resource-pool-namespace": resource_handle.resource_pool_namespace,
+                Poolboy.resource_pool_name_annotation: resource_handle.resource_pool_name,
+                Poolboy.resource_pool_namespace_annotation: resource_handle.resource_pool_namespace,
             })
 
         if requester_user:
             resource_definition['metadata']['annotations'].update({
-                f"{Poolboy.operator_domain}/resource-requester-user": requester_user['metadata']['name'],
+                Poolboy.resource_requester_user_annotation: requester_user['metadata']['name'],
             })
 
         if requester_identity:
             resource_definition['metadata']['annotations'].update({
-                f"{Poolboy.operator_domain}/resource-requester-email": requester_identity.get('extra', {}).get('email', ''),
-                f"{Poolboy.operator_domain}/resource-requester-name": requester_identity.get('extra', {}).get('name', ''),
-                f"{Poolboy.operator_domain}/resource-requester-preferred-username": requester_identity.get('extra', {}).get('preferred_username', ''),
+                Poolboy.resource_requester_email_annotation: requester_identity.get('extra', {}).get('email', ''),
+                Poolboy.resource_requester_name_annotation: requester_identity.get('extra', {}).get('name', ''),
+                Poolboy.resource_requester_preferred_username_annotation: requester_identity.get('extra', {}).get('preferred_username', ''),
             })
 
         return resource_definition
@@ -783,17 +783,17 @@ class ResourceProvider:
         resource_definition: Mapping,
         resource_handle: ResourceHandleT,
         resource_state: Mapping,
-    ) -> Optional[List]:
+    ) -> Mapping|None:
         update_filters = self.update_filters + [{
             'pathMatch': f"/metadata/annotations/{re.escape(Poolboy.operator_domain)}~1resource-.*"
         }]
         patch = jsonpatch_from_diff(resource_state, resource_definition, update_filters=update_filters)
         if patch:
-            await poolboy_k8s.patch_object(
+            resource = await poolboy_k8s.patch_object(
                 api_version = resource_definition['apiVersion'],
                 kind = resource_definition['kind'],
                 name = resource_definition['metadata']['name'],
                 namespace = resource_definition['metadata'].get('namespace'),
                 patch = patch,
             )
-            return patch
+            return resource

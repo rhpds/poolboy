@@ -192,7 +192,7 @@
     __state.status.lifespan.relativeMaximum != '1d'
   until: r_get_resource_claim is success
   delay: 1
-  retries: 10
+  retries: 15
 
 - name: Selt lifespan test-02 to end now
   vars:

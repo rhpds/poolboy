@@ -29,6 +29,12 @@ spec:
             value: "{{ .Values.managePoolsInterval }}"
           - name: OPERATOR_DOMAIN
             value: {{ include "poolboy.operatorDomain" . }}
+          - name: OPERATOR_MODE
+            value: "{{ .Values.operatorMode }}"
+          {{- if eq .Values.operatorMode "manager" }}
+          - name: RESOURCE_HANDLER_COUNT
+            value: "{{ .Values.resourceHandlerCount }}"
+          {{- end }}
           - name: RESOURCE_REFRESH_INTERVAL
             value: "{{ .Values.resourceRefreshInterval }}"
           image: "{{ include "poolboy.image" . }}"

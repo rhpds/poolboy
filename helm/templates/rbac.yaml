@@ -57,6 +57,8 @@ rules:
   - resourcehandles/status
   - resourcepools
   - resourcepools/status
+  - resourcewatches
+  - resourcewatches/status
   verbs:
   - create
   - delete
@@ -96,6 +98,39 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
+  name: {{ include "poolboy.name" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "poolboy.serviceAccountName" . }}
+  namespace: {{ include "poolboy.namespaceName" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "poolboy.name" . }}
+  namespace: {{ include "poolboy.namespaceName" . }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "poolboy.name" . }}
+  namespace: {{ include "poolboy.namespaceName" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
   name: {{ include "poolboy.name" . }}
 subjects:
 - kind: ServiceAccount

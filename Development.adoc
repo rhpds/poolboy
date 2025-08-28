@@ -128,6 +128,7 @@ ansible-playbook \
 -e poolboy_namespace=poolboy-dev \
 -e poolboy_service_account=poolboy-dev \
 -e poolboy_test_namespace=poolboy-dev-test \
+-e poolboy_tests='["simple"]' \
 test/playbook.yaml
 ----
 +

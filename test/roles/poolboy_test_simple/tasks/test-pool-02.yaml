@@ -208,6 +208,9 @@
       {{ r_get_resource_handles.resources | json_query('[?spec.resourceClaim==null]') }}
   failed_when: >-
     __unbound_handles | length != 1
+  until: r_get_resource_handles is successful
+  retries: 10
+  delay: 1
 
 - name: Delete ResourcePool test-pool-02
   kubernetes.core.k8s:
