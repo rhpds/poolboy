@@ -397,6 +397,7 @@ class ResourceWatch(KopfObject):
                 value=self.name,
             )
         )
+        pod.spec.nodeName = None
         pod = await Poolboy.core_v1_api.create_namespaced_pod(
             namespace=Poolboy.namespace,
             body=pod,

@@ -240,6 +240,7 @@ class Poolboy():
                     value=str(idx),
                 )
             )
+            pod.spec.nodeName = None
             await cls.core_v1_api.create_namespaced_pod(
                 namespace=cls.namespace,
                 body=pod,
