@@ -26,7 +26,21 @@ manageClaimsInterval: 60
 manageHandlesInterval: 60
 managePoolsInterval: 10
 resourceRefreshInterval: 600
-resourceHandlerCount: 3
+resourceHandlerCount: 1
+resourceHandlerResources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+resourceWatchResources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
 
 anarchy:
   # Control whether anarchy integration should be created
