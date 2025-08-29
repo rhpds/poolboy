@@ -535,7 +535,10 @@ class ResourceWatch(KopfObject):
                             raise ResourceWatchFailedError(f"{event_obj['reason']} {event_obj['message']}")
                     else:
                         raise ResourceWatchFailedError(f"UNKNOWN EVENT: {event}")
-                await self.__watch_event(event_type=event_type, event_obj=event_obj)
+                try:
+                    await self.__watch_event(event_type=event_type, event_obj=event_obj)
+                except Exception:
+                    logger.exception(f"Error handling {event}")
         except kubernetes_asyncio.client.exceptions.ApiException as exception:
             if exception.status == 410:
                 raise ResourceWatchRestartError("Received 410 expired response.")
