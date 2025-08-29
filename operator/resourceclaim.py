@@ -532,7 +532,13 @@ class ResourceClaim(KopfObject):
                     })
 
             for resource_index, status_resource in enumerate(resource_handle.status_resources):
-                current_entry = self.status['resources'][resource_index]
+                if resource_index < len(self.status['resources']):
+                    current_entry = self.status['resources'][resource_index]
+                    patch_op = "replace"
+                else:
+                    current_entry = {}
+                    patch_op = "add"
+
                 resource_entry = {
                     "provider": resource_handle.resources[resource_index]['provider'],
                     **status_resource,
@@ -547,9 +553,9 @@ class ResourceClaim(KopfObject):
                 elif 'state' in current_entry:
                     resource_entry['state'] = current_entry['state']
 
-                if resource_entry != self.status['resources'][resource_index]:
+                if resource_entry != current_entry:
                     patch.append({
-                        "op": "replace",
+                        "op": patch_op,
                         "path": f"/status/resources/{resource_index}",
                         "value": resource_entry,
                     })
