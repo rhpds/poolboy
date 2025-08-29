@@ -552,7 +552,7 @@ class ResourceWatch(KopfObject):
         event_obj_annotations = event_obj['metadata'].get('annotations')
         if not event_obj_annotations:
             return
-        if event_obj_annotations.get(Poolboy.resource_handle_deleted_annotation) == 'true':
+        if event_obj_annotations.get(Poolboy.resource_handle_deleted_annotation) is not None:
             return
 
         resource_handle_name = event_obj_annotations.get(Poolboy.resource_handle_name_annotation)
