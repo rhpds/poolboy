@@ -568,6 +568,11 @@ class ResourceWatch(KopfObject):
         if not resource_handle_name:
             return
 
+        if event_type == 'DELETED':
+            self.cache.pop(resource_name, None)
+        else:
+            self.cache[resource_name] = ResourceWatch.CacheEntry(event_obj)
+
         try:
             resource_handle = await resourcehandle.ResourceHandle.get(
                 name=resource_handle_name,

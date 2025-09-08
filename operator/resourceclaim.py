@@ -82,7 +82,11 @@ class ResourceClaim(KopfObject):
             if use_cache and (namespace, name) in cls.instances:
                 return cls.instances[(namespace, name)]
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
-                Poolboy.operator_domain, Poolboy.operator_version, namespace, 'resourceclaims', name
+                group=cls.api_group,
+                name=name,
+                namespace=namespace,
+                plural=cls.plural,
+                version=cls.api_version,
             )
             if use_cache:
                 return cls.__register_definition(definition)
@@ -549,13 +553,18 @@ class ResourceClaim(KopfObject):
                     "provider": resource_handle.resources[resource_index]['provider'],
                     **status_resource,
                 }
+                if 'name' in current_entry:
+                    resource_entry['name'] = current_entry['name']
                 if 'validationError' in current_entry:
                     resource_entry['validationError'] = current_entry['validationError']
-                if resource_states:
-                    if resource_index < len(resource_states) and resource_states[resource_index] is not None:
-                        resource_entry['state'] = prune_k8s_resource(
-                            resource_states[resource_index]
-                        )
+                if (
+                    resource_states and
+                    resource_index < len(resource_states) and
+                    resource_states[resource_index] is not None
+                ):
+                    resource_entry['state'] = prune_k8s_resource(
+                        resource_states[resource_index]
+                    )
                 elif 'state' in current_entry:
                     resource_entry['state'] = current_entry['state']
 
