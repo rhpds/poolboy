@@ -23,12 +23,12 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
     ret = {
         key: value
         for key, value in resource.items()
-        if key != "metadata"
+        if key not in {"metadata", "status"}
     }
     ret["metadata"] = {
         key: value
         for key, value in resource['metadata'].items()
-        if key not in {'annotations', 'managedFields'}
+        if key not in {'annotations', 'managedFields', 'resourceVersion'}
     }
     if 'annotations' in resource['metadata']:
         filtered_annotations = {
@@ -38,6 +38,12 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
         }
         if filtered_annotations:
             ret["metadata"]["annotations"] = filtered_annotations
+    if 'status' in resource:
+        ret["status"] = {
+            key: value
+            for key, value in resource['status'].items()
+            if not key in {'diffBase'}
+        }
     return ret
 
 class ResourceClaim(KopfObject):
