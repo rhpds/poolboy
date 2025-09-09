@@ -23,12 +23,12 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
     ret = {
         key: value
         for key, value in resource.items()
-        if key != "metadata"
+        if key not in {"metadata", "status"}
     }
     ret["metadata"] = {
         key: value
         for key, value in resource['metadata'].items()
-        if key not in {'annotations', 'managedFields'}
+        if key not in {'annotations', 'generation', 'managedFields'}
     }
     if 'annotations' in resource['metadata']:
         filtered_annotations = {
@@ -38,6 +38,12 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
         }
         if filtered_annotations:
             ret["metadata"]["annotations"] = filtered_annotations
+    if 'status' in resource:
+        ret["status"] = {
+            key: value
+            for key, value in resource['status'].items()
+            if not key in {'diffBase'}
+        }
     return ret
 
 class ResourceClaim(KopfObject):
@@ -76,7 +82,11 @@ class ResourceClaim(KopfObject):
             if use_cache and (namespace, name) in cls.instances:
                 return cls.instances[(namespace, name)]
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
-                Poolboy.operator_domain, Poolboy.operator_version, namespace, 'resourceclaims', name
+                group=cls.api_group,
+                name=name,
+                namespace=namespace,
+                plural=cls.plural,
+                version=cls.api_version,
             )
             if use_cache:
                 return cls.__register_definition(definition)
@@ -543,13 +553,18 @@ class ResourceClaim(KopfObject):
                     "provider": resource_handle.resources[resource_index]['provider'],
                     **status_resource,
                 }
+                if 'name' in current_entry:
+                    resource_entry['name'] = current_entry['name']
                 if 'validationError' in current_entry:
                     resource_entry['validationError'] = current_entry['validationError']
-                if resource_states:
-                    if resource_index < len(resource_states) and resource_states[resource_index] is not None:
-                        resource_entry['state'] = prune_k8s_resource(
-                            resource_states[resource_index]
-                        )
+                if (
+                    resource_states and
+                    resource_index < len(resource_states) and
+                    resource_states[resource_index] is not None
+                ):
+                    resource_entry['state'] = prune_k8s_resource(
+                        resource_states[resource_index]
+                    )
                 elif 'state' in current_entry:
                     resource_entry['state'] = current_entry['state']
 
