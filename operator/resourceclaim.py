@@ -28,7 +28,7 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
     ret["metadata"] = {
         key: value
         for key, value in resource['metadata'].items()
-        if key not in {'annotations', 'managedFields', 'resourceVersion'}
+        if key not in {'annotations', 'generation', 'managedFields'}
     }
     if 'annotations' in resource['metadata']:
         filtered_annotations = {
