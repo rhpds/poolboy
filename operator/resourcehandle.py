@@ -1158,7 +1158,10 @@ class ResourceHandle(KopfObject):
                     linked_resource_provider = None
                     linked_resource_state = None
                     for pn, pv in enumerate(resource_providers):
-                        if pv.name == linked_provider.name:
+                        if (
+                            pv.name == linked_provider.name and
+                            self.resources[pn].get('name', pv.name) == linked_provider.resource_name
+                        ):
                             linked_resource_provider = pv
                             linked_resource_state = resource_states[pn]
                             break
