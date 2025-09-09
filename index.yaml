@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   poolboy:
   - apiVersion: v2
+    appVersion: 1.14.5
+    created: "2025-09-09T13:18:02.075762359Z"
+    description: A Helm chart for poolboy
+    digest: 79162c174838ae5b1ae328006d686f5db9c3f8d94e611bbdb59b471118b5d2e3
+    name: poolboy
+    type: application
+    urls:
+    - https://redhat-cop.github.io/poolboy/poolboy-1.14.5.tgz
+    version: 1.14.5
+  - apiVersion: v2
     appVersion: 1.14.4
-    created: "2025-08-29T14:59:38.87355929Z"
+    created: "2025-09-09T13:18:02.075033136Z"
     description: A Helm chart for poolboy
     digest: 3f9f4e9e90f4ce5d22d4431bcba0f6e4e3675ee7b617faa5badfa67790e212db
     name: poolboy
@@ -13,7 +23,7 @@ entries:
     version: 1.14.4
   - apiVersion: v2
     appVersion: 1.14.3
-    created: "2025-08-29T14:59:38.872818596Z"
+    created: "2025-09-09T13:18:02.074304975Z"
     description: A Helm chart for poolboy
     digest: e5355829afb47bc22dfdf3cb5bc76f90106657dc1796b5b609c13474e62c1b9f
     name: poolboy
@@ -23,7 +33,7 @@ entries:
     version: 1.14.3
   - apiVersion: v2
     appVersion: 1.14.2
-    created: "2025-08-29T14:59:38.87206032Z"
+    created: "2025-09-09T13:18:02.073576884Z"
     description: A Helm chart for poolboy
     digest: a53af23ddeab189a1ae2bf5284ca43de380671ed2f6d3fad40cd8f3efad157f8
     name: poolboy
@@ -33,7 +43,7 @@ entries:
     version: 1.14.2
   - apiVersion: v2
     appVersion: 1.14.1
-    created: "2025-08-29T14:59:38.871336327Z"
+    created: "2025-09-09T13:18:02.072802485Z"
     description: A Helm chart for poolboy
     digest: facd4653310e2e407a803eaf986958470634f7559946cf87904160942dcbaa5a
     name: poolboy
@@ -43,7 +53,7 @@ entries:
     version: 1.14.1
   - apiVersion: v2
     appVersion: 1.14.0
-    created: "2025-08-29T14:59:38.87058906Z"
+    created: "2025-09-09T13:18:02.072090615Z"
     description: A Helm chart for poolboy
     digest: a3ef97c90da75d8a7dc5bdbb5a363b94ffa7ec7ecbacc42be8de9cc788d15fb3
     name: poolboy
@@ -53,7 +63,7 @@ entries:
     version: 1.14.0
   - apiVersion: v2
     appVersion: 1.13.1
-    created: "2025-08-29T14:59:38.869036585Z"
+    created: "2025-09-09T13:18:02.070784993Z"
     description: A Helm chart for poolboy
     digest: c57edc6c5ed8b0654f50bfbf30ff41ac72f76107eb3f867e46cb244c85963be7
     name: poolboy
@@ -63,7 +73,7 @@ entries:
     version: 1.13.1
   - apiVersion: v2
     appVersion: 1.13.0
-    created: "2025-08-29T14:59:38.868406989Z"
+    created: "2025-09-09T13:18:02.069989513Z"
     description: A Helm chart for poolboy
     digest: 7d3af657129a37b12bb4010996a279d8b48d0e3bb5b0226230a6b993c5368c07
     name: poolboy
@@ -73,7 +83,7 @@ entries:
     version: 1.13.0
   - apiVersion: v2
     appVersion: 1.12.2
-    created: "2025-08-29T14:59:38.867747126Z"
+    created: "2025-09-09T13:18:02.069371112Z"
     description: A Helm chart for poolboy
     digest: 4ed7970b22884f23cc21b69b6dd58792ceebe98d29b04ab30ae68308fedddc3b
     name: poolboy
@@ -83,7 +93,7 @@ entries:
     version: 1.12.2
   - apiVersion: v2
     appVersion: 1.12.1
-    created: "2025-08-29T14:59:38.867104135Z"
+    created: "2025-09-09T13:18:02.068712403Z"
     description: A Helm chart for poolboy
     digest: ab185daf66793d27721c59bd8a8eb2f6b372e591ad08e91954f02bfea71be220
     name: poolboy
@@ -93,7 +103,7 @@ entries:
     version: 1.12.1
   - apiVersion: v2
     appVersion: 1.12.0
-    created: "2025-08-29T14:59:38.866440024Z"
+    created: "2025-09-09T13:18:02.068048786Z"
     description: A Helm chart for poolboy
     digest: 32128dc6b1d08d1ea1d79fa9ca12d5f93c377aa6445fe7407240e13a47e450cf
     name: poolboy
@@ -103,7 +113,7 @@ entries:
     version: 1.12.0
   - apiVersion: v2
     appVersion: 1.11.2
-    created: "2025-08-29T14:59:38.865764211Z"
+    created: "2025-09-09T13:18:02.067395588Z"
     description: A Helm chart for poolboy
     digest: 6e4bcc292ca2399e2d5c65c07c35f07c0a32e65ddea64b32c205dda7f66d91ed
     name: poolboy
@@ -113,7 +123,7 @@ entries:
     version: 1.11.2
   - apiVersion: v2
     appVersion: 1.11.1
-    created: "2025-08-29T14:59:38.865111341Z"
+    created: "2025-09-09T13:18:02.066751468Z"
     description: A Helm chart for poolboy
     digest: d5f790b71dc3c716f984bf0fe46b1a8b33b665a8a091322175ae390baf0a39d9
     name: poolboy
@@ -123,7 +133,7 @@ entries:
     version: 1.11.1
   - apiVersion: v2
     appVersion: 1.11.0
-    created: "2025-08-29T14:59:38.864141025Z"
+    created: "2025-09-09T13:18:02.06607242Z"
     description: A Helm chart for poolboy
     digest: df77d41208a3e8fb7ff89e41d4e43cf7b5c5397e0eb98b0aa27abef77c544253
     name: poolboy
@@ -133,7 +143,7 @@ entries:
     version: 1.11.0
   - apiVersion: v2
     appVersion: 1.10.8
-    created: "2025-08-29T14:59:38.862882101Z"
+    created: "2025-09-09T13:18:02.065260578Z"
     description: A Helm chart for poolboy
     digest: 233cb1ef2edddb79d00b5039d8298ce5df0a226000d91b76d74237f900cdb92f
     name: poolboy
@@ -143,7 +153,7 @@ entries:
     version: 1.10.8
   - apiVersion: v2
     appVersion: 1.10.7
-    created: "2025-08-29T14:59:38.862217269Z"
+    created: "2025-09-09T13:18:02.064096184Z"
     description: A Helm chart for poolboy
     digest: dacea260ed6eaad91152e163d90a70dff0aeb83065cb399cd25e82dc6cb403a0
     name: poolboy
@@ -153,7 +163,7 @@ entries:
     version: 1.10.7
   - apiVersion: v2
     appVersion: 1.10.6
-    created: "2025-08-29T14:59:38.861580008Z"
+    created: "2025-09-09T13:18:02.063468785Z"
     description: A Helm chart for poolboy
     digest: 2c9f6cdbcf54a5548a2809f09f4f2fcc5395a9d48f87b1e3430a512736e4d1d5
     name: poolboy
@@ -163,7 +173,7 @@ entries:
     version: 1.10.6
   - apiVersion: v2
     appVersion: 1.10.5
-    created: "2025-08-29T14:59:38.860950673Z"
+    created: "2025-09-09T13:18:02.062814515Z"
     description: A Helm chart for poolboy
     digest: da64748d0e5fe6efc5398a6f787cd11425c46ba95ff6ce78ec5989b5a04dd449
     name: poolboy
@@ -173,7 +183,7 @@ entries:
     version: 1.10.5
   - apiVersion: v2
     appVersion: 1.10.4
-    created: "2025-08-29T14:59:38.86033366Z"
+    created: "2025-09-09T13:18:02.062169513Z"
     description: A Helm chart for poolboy
     digest: 3adfd5a167acd04e65fb74e7c6cd304ded02e993902009f1a72a88a3a43b2573
     name: poolboy
@@ -183,7 +193,7 @@ entries:
     version: 1.10.4
   - apiVersion: v2
     appVersion: 1.10.3
-    created: "2025-08-29T14:59:38.859682082Z"
+    created: "2025-09-09T13:18:02.061531975Z"
     description: A Helm chart for poolboy
     digest: d583868b0b868d2f94294dbe77d2b2940f556fb52205bc8d1e7b3103e382d9a9
     name: poolboy
@@ -193,7 +203,7 @@ entries:
     version: 1.10.3
   - apiVersion: v2
     appVersion: 1.10.2
-    created: "2025-08-29T14:59:38.859012101Z"
+    created: "2025-09-09T13:18:02.060866604Z"
     description: A Helm chart for poolboy
     digest: 96192e375fbe6049d927374051b884b4201a1f29aaf7294dd5a43e3170170ceb
     name: poolboy
@@ -203,7 +213,7 @@ entries:
     version: 1.10.2
   - apiVersion: v2
     appVersion: 1.10.1
-    created: "2025-08-29T14:59:38.858152227Z"
+    created: "2025-09-09T13:18:02.060226862Z"
     description: A Helm chart for poolboy
     digest: 4d9aad9e31e8536543115f71c30abb9cb6ea2a3930fbe86b5113d1787581c3be
     name: poolboy
@@ -213,7 +223,7 @@ entries:
     version: 1.10.1
   - apiVersion: v2
     appVersion: 1.10.0
-    created: "2025-08-29T14:59:38.856985366Z"
+    created: "2025-09-09T13:18:02.059431077Z"
     description: A Helm chart for poolboy
     digest: 4b954f0019d40c4b92d23e2b2f80940113452d87fb501c05ea06d61de7131e99
     name: poolboy
@@ -223,7 +233,7 @@ entries:
     version: 1.10.0
   - apiVersion: v2
     appVersion: 1.9.2
-    created: "2025-08-29T14:59:38.884892016Z"
+    created: "2025-09-09T13:18:02.086890736Z"
     description: A Helm chart for poolboy
     digest: 4ece5398173f906d2fd62a75fe9a2cba4a6e8f08a3797342a8e9e2f1ee2a48dc
     name: poolboy
@@ -233,7 +243,7 @@ entries:
     version: 1.9.2
   - apiVersion: v2
     appVersion: 1.9.1
-    created: "2025-08-29T14:59:38.884279682Z"
+    created: "2025-09-09T13:18:02.086302563Z"
     description: A Helm chart for poolboy
     digest: aec1f2bf57bfab5d0f85e4572805c9f9d56c963514421f6aa438b527ee0de2c7
     name: poolboy
@@ -243,7 +253,7 @@ entries:
     version: 1.9.1
   - apiVersion: v2
     appVersion: 1.9.0
-    created: "2025-08-29T14:59:38.883331508Z"
+    created: "2025-09-09T13:18:02.085666398Z"
     description: A Helm chart for poolboy
     digest: 9ddd4d08ff9017de87a0804b444f1139df1a714eaa3facce4f4b2f0ad55a256b
     name: poolboy
@@ -253,7 +263,7 @@ entries:
     version: 1.9.0
   - apiVersion: v2
     appVersion: 1.8.1
-    created: "2025-08-29T14:59:38.882117009Z"
+    created: "2025-09-09T13:18:02.084758335Z"
     description: A Helm chart for poolboy
     digest: 95c56c4336637b52efcb649805f551fe9344b1b1724bce9f2dec50e6892d468c
     name: poolboy
@@ -263,7 +273,7 @@ entries:
     version: 1.8.1
   - apiVersion: v2
     appVersion: 1.8.0
-    created: "2025-08-29T14:59:38.88152884Z"
+    created: "2025-09-09T13:18:02.083601696Z"
     description: A Helm chart for poolboy
     digest: c2db0d9b78b18ccd7684db48d57d1719ac191d6f0777eff41fd52102a99e249a
     name: poolboy
@@ -273,7 +283,7 @@ entries:
     version: 1.8.0
   - apiVersion: v2
     appVersion: 1.7.2
-    created: "2025-08-29T14:59:38.88092433Z"
+    created: "2025-09-09T13:18:02.082976271Z"
     description: A Helm chart for poolboy
     digest: a13a13b726a1fc0cc67ddfb1d15983c707c2cf64ea4b828b279753ecb1c2164b
     name: poolboy
@@ -283,7 +293,7 @@ entries:
     version: 1.7.2
   - apiVersion: v2
     appVersion: 1.7.1
-    created: "2025-08-29T14:59:38.880325422Z"
+    created: "2025-09-09T13:18:02.082417844Z"
     description: A Helm chart for poolboy
     digest: aacde6b112619e8d04a7778b235d75a7c7b7a34f60f0d2777d566ef833e6f72f
     name: poolboy
@@ -293,7 +303,7 @@ entries:
     version: 1.7.1
   - apiVersion: v2
     appVersion: 1.7.0
-    created: "2025-08-29T14:59:38.87974134Z"
+    created: "2025-09-09T13:18:02.081835632Z"
     description: A Helm chart for poolboy
     digest: 0fc272b4d2882511c814d800997288f96b399af3c8dbca0edea827b0af4e1f22
     name: poolboy
@@ -303,7 +313,7 @@ entries:
     version: 1.7.0
   - apiVersion: v2
     appVersion: 1.6.0
-    created: "2025-08-29T14:59:38.879166637Z"
+    created: "2025-09-09T13:18:02.081267246Z"
     description: A Helm chart for poolboy
     digest: f8b28e1d5eabd621d0cbad6f90c8be5cf07a4111e11cc97cf06244b308314b3b
     name: poolboy
@@ -313,7 +323,7 @@ entries:
     version: 1.6.0
   - apiVersion: v2
     appVersion: 1.5.0
-    created: "2025-08-29T14:59:38.878586593Z"
+    created: "2025-09-09T13:18:02.080688952Z"
     description: A Helm chart for poolboy
     digest: e8cec3d32447033a5c6716d93195d04548510d1c5f095feff12ad6f4713f626f
     name: poolboy
@@ -323,7 +333,7 @@ entries:
     version: 1.5.0
   - apiVersion: v2
     appVersion: 1.4.0
-    created: "2025-08-29T14:59:38.877993725Z"
+    created: "2025-09-09T13:18:02.080123822Z"
     description: A Helm chart for poolboy
     digest: 2776eef722273d40221bbda2c42b4d7d6e5fdf6c06f550fc2be7748695606ae5
     name: poolboy
@@ -333,7 +343,7 @@ entries:
     version: 1.4.0
   - apiVersion: v2
     appVersion: 1.3.2
-    created: "2025-08-29T14:59:38.877332039Z"
+    created: "2025-09-09T13:18:02.079535368Z"
     description: A Helm chart for poolboy
     digest: fe2b7073b5869e1b2205317e5a4f17b8b209c1eab7c10aace9cdffe06e9bc6f4
     name: poolboy
@@ -343,7 +353,7 @@ entries:
     version: 1.3.2
   - apiVersion: v2
     appVersion: 1.3.1
-    created: "2025-08-29T14:59:38.875809654Z"
+    created: "2025-09-09T13:18:02.078937706Z"
     description: A Helm chart for poolboy
     digest: fc19d03d9c1c2c3aa6cc26bd4df3d8768bfe805c409bf213ab396970a4730eb8
     name: poolboy
@@ -353,7 +363,7 @@ entries:
     version: 1.3.1
   - apiVersion: v2
     appVersion: 1.3.0
-    created: "2025-08-29T14:59:38.875272341Z"
+    created: "2025-09-09T13:18:02.077990515Z"
     description: A Helm chart for poolboy
     digest: 95f1a603d184eb16a3cef2919c6679d45ce3280017019d1b21eef85629b837d4
     name: poolboy
@@ -363,7 +373,7 @@ entries:
     version: 1.3.0
   - apiVersion: v2
     appVersion: 1.2.1
-    created: "2025-08-29T14:59:38.874714588Z"
+    created: "2025-09-09T13:18:02.076882999Z"
     description: A Helm chart for poolboy
     digest: fbce2060b119c8fc4257f75a248bfea02cf730563e656affaea3687ef6755952
     name: poolboy
@@ -373,7 +383,7 @@ entries:
     version: 1.2.1
   - apiVersion: v2
     appVersion: 1.2.0
-    created: "2025-08-29T14:59:38.874177696Z"
+    created: "2025-09-09T13:18:02.076360512Z"
     description: A Helm chart for poolboy
     digest: 34218d89e25781dbcee2614dd0b8143720cff4781e7f907be4bc9a520655d066
     name: poolboy
@@ -383,7 +393,7 @@ entries:
     version: 1.2.0
   - apiVersion: v2
     appVersion: 1.1.4
-    created: "2025-08-29T14:59:38.856357533Z"
+    created: "2025-09-09T13:18:02.05822067Z"
     description: A Helm chart for poolboy
     digest: 75c2a4b5548b6d5fa9eec035ffd567b73c36353f5e9ff760709d62eb36f6d8db
     name: poolboy
@@ -393,7 +403,7 @@ entries:
     version: 1.1.4
   - apiVersion: v2
     appVersion: 1.1.3
-    created: "2025-08-29T14:59:38.855754647Z"
+    created: "2025-09-09T13:18:02.057624171Z"
     description: A Helm chart for poolboy
     digest: 5c63f561f81a0fe014c4dfc7b71bbc8ed18ba8a236cf228262661e480938c9a9
     name: poolboy
@@ -403,7 +413,7 @@ entries:
     version: 1.1.3
   - apiVersion: v2
     appVersion: 1.1.2
-    created: "2025-08-29T14:59:38.855164514Z"
+    created: "2025-09-09T13:18:02.056968929Z"
     description: A Helm chart for poolboy
     digest: 1750aa52aab0e5ab9068887a1035a3f87a84411bd0b64b2c11c4e216f0d3ce5e
     name: poolboy
@@ -413,7 +423,7 @@ entries:
     version: 1.1.2
   - apiVersion: v2
     appVersion: 1.1.1
-    created: "2025-08-29T14:59:38.854557931Z"
+    created: "2025-09-09T13:18:02.056376106Z"
     description: A Helm chart for poolboy
     digest: ed0a023a94967e6ab5fcdccff4dbbc62f627417493e6d88b76b52b342409d302
     name: poolboy
@@ -423,7 +433,7 @@ entries:
     version: 1.1.1
   - apiVersion: v2
     appVersion: 1.1.0
-    created: "2025-08-29T14:59:38.853926862Z"
+    created: "2025-09-09T13:18:02.055753928Z"
     description: A Helm chart for poolboy
     digest: 6e5417f78f9eca538423ce1434283fc2921fad8f015281030faee06860ca8e59
     name: poolboy
@@ -433,7 +443,7 @@ entries:
     version: 1.1.0
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-08-29T14:59:38.853305341Z"
+    created: "2025-09-09T13:18:02.055139103Z"
     description: A Helm chart for poolboy
     digest: 55724c806b92f5f85fdb09b98739f6de31912acb06bc3f4c889668c7bb527897
     name: poolboy
@@ -443,7 +453,7 @@ entries:
     version: 1.0.0
   - apiVersion: v2
     appVersion: 0.12.0
-    created: "2025-08-29T14:59:38.845130838Z"
+    created: "2025-09-09T13:18:02.046744824Z"
     description: A Helm chart for poolboy
     digest: 96962ec35c62e9765d8ac0b2448d549a804a2515b2cb68ef4635b936c31a1c49
     name: poolboy
@@ -453,7 +463,7 @@ entries:
     version: 0.12.0
   - apiVersion: v2
     appVersion: 0.11.1
-    created: "2025-08-29T14:59:38.84435594Z"
+    created: "2025-09-09T13:18:02.046077709Z"
     description: A Helm chart for poolboy
     digest: 546e01a168cc1c17a7e4b6fcd1631c549b56952792c20483a1ad0fcc5e2dd37d
     name: poolboy
@@ -463,7 +473,7 @@ entries:
     version: 0.11.1
   - apiVersion: v2
     appVersion: 0.11.0
-    created: "2025-08-29T14:59:38.843216Z"
+    created: "2025-09-09T13:18:02.044949935Z"
     description: A Helm chart for poolboy
     digest: bf50a36081d0bb057271842ec644b28596b2227801b2903e3b196f794b0afeb7
     name: poolboy
@@ -473,7 +483,7 @@ entries:
     version: 0.11.0
   - apiVersion: v2
     appVersion: 0.10.8
-    created: "2025-08-29T14:59:38.842572267Z"
+    created: "2025-09-09T13:18:02.043782635Z"
     description: A Helm chart for poolboy
     digest: fc8129749d943725be5585ce71be51749fc3715b55e4053601ca39a0aa13915a
     name: poolboy
@@ -483,7 +493,7 @@ entries:
     version: 0.10.8
   - apiVersion: v2
     appVersion: 0.10.7
-    created: "2025-08-29T14:59:38.841935507Z"
+    created: "2025-09-09T13:18:02.043163041Z"
     description: A Helm chart for poolboy
     digest: 86af08f136c2ad335fda4b70d09651c19c6deec9e5f69fa7d7ad9022f0ccb801
     name: poolboy
@@ -493,7 +503,7 @@ entries:
     version: 0.10.7
   - apiVersion: v2
     appVersion: 0.10.6
-    created: "2025-08-29T14:59:38.841332481Z"
+    created: "2025-09-09T13:18:02.042541003Z"
     description: A Helm chart for poolboy
     digest: 3e0d44b1b560296269e46e56ec463e447c9b5af4775e2f2b42072fe56e3de5ce
     name: poolboy
@@ -503,7 +513,7 @@ entries:
     version: 0.10.6
   - apiVersion: v2
     appVersion: 0.10.5
-    created: "2025-08-29T14:59:38.840688888Z"
+    created: "2025-09-09T13:18:02.041735194Z"
     description: A Helm chart for poolboy
     digest: 319478f38173f2da9aa0d84570b6c70b4cd0ceac423e9c2d9665e77f9eddd45c
     name: poolboy
@@ -513,7 +523,7 @@ entries:
     version: 0.10.5
   - apiVersion: v2
     appVersion: 0.10.4
-    created: "2025-08-29T14:59:38.840052289Z"
+    created: "2025-09-09T13:18:02.041081455Z"
     description: A Helm chart for poolboy
     digest: c37c6576f1fdea177ca52418f51f1148e5a6d820a04b3bc8b0c0f39feb304658
     name: poolboy
@@ -523,7 +533,7 @@ entries:
     version: 0.10.4
   - apiVersion: v2
     appVersion: 0.10.3
-    created: "2025-08-29T14:59:38.839417323Z"
+    created: "2025-09-09T13:18:02.040442354Z"
     description: A Helm chart for poolboy
     digest: 4e3b6347e812b12a77766a2377ba63ee49d5768050c1c5eb9019127628d63fa1
     name: poolboy
@@ -533,7 +543,7 @@ entries:
     version: 0.10.3
   - apiVersion: v2
     appVersion: 0.10.2
-    created: "2025-08-29T14:59:38.838767919Z"
+    created: "2025-09-09T13:18:02.039810387Z"
     description: A Helm chart for poolboy
     digest: c0842c24ae6417133379371cbd354d2208e4a0bf85d94c25573b026ff707fe40
     name: poolboy
@@ -543,7 +553,7 @@ entries:
     version: 0.10.2
   - apiVersion: v2
     appVersion: 0.10.1
-    created: "2025-08-29T14:59:38.838134706Z"
+    created: "2025-09-09T13:18:02.039180674Z"
     description: A Helm chart for poolboy
     digest: 16b15ee2f592130a1bc3dcd510e75ac872acd2ca1948a4d122ed01c40d14e9a7
     name: poolboy
@@ -553,7 +563,7 @@ entries:
     version: 0.10.1
   - apiVersion: v2
     appVersion: 0.10.0
-    created: "2025-08-29T14:59:38.836427326Z"
+    created: "2025-09-09T13:18:02.03839321Z"
     description: A Helm chart for poolboy
     digest: 4dda623a1ea87dc58202b098366833e0b87c828ecc20bace6f56a9c7ab8fa133
     name: poolboy
@@ -563,7 +573,7 @@ entries:
     version: 0.10.0
   - apiVersion: v2
     appVersion: 0.9.1
-    created: "2025-08-29T14:59:38.85267335Z"
+    created: "2025-09-09T13:18:02.05451453Z"
     description: A Helm chart for poolboy
     digest: 535abaf8f0c561befca1e866437fa64ffe3ada8b7b9fbe6e9211c5a459ce9757
     name: poolboy
@@ -573,7 +583,7 @@ entries:
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
-    created: "2025-08-29T14:59:38.852013828Z"
+    created: "2025-09-09T13:18:02.053867505Z"
     description: A Helm chart for poolboy
     digest: 185f4057a55c712bfcb60b5c74c6f5f7724476aebe710886db6ec762fcfee46c
     name: poolboy
@@ -583,7 +593,7 @@ entries:
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.8
-    created: "2025-08-29T14:59:38.85129807Z"
+    created: "2025-09-09T13:18:02.053189289Z"
     description: A Helm chart for poolboy
     digest: cae847480f1be1c59aef3aab4f37efa29a251820f47dc16b98695c3e5548bf75
     name: poolboy
@@ -593,7 +603,7 @@ entries:
     version: 0.8.8
   - apiVersion: v2
     appVersion: 0.8.7
-    created: "2025-08-29T14:59:38.849980769Z"
+    created: "2025-09-09T13:18:02.051908016Z"
     description: A Helm chart for poolboy
     digest: 98faec5849186152bdd12f0bf2d3c3f1e0b2d3f219488eb54356b688c7c0e792
     name: poolboy
@@ -603,7 +613,7 @@ entries:
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
-    created: "2025-08-29T14:59:38.849390897Z"
+    created: "2025-09-09T13:18:02.051277722Z"
     description: A Helm chart for poolboy
     digest: 0b647a293681839ee8f35c9453383c04cd741273cd4a27374412a0f99c37ddea
     name: poolboy
@@ -613,7 +623,7 @@ entries:
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
-    created: "2025-08-29T14:59:38.848785406Z"
+    created: "2025-09-09T13:18:02.050547978Z"
     description: A Helm chart for poolboy
     digest: 88580dd9a4a956e753bfd899b58600b67c3c31fc84b95304a160d7a05735c8c6
     name: poolboy
@@ -623,7 +633,7 @@ entries:
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
-    created: "2025-08-29T14:59:38.848196305Z"
+    created: "2025-09-09T13:18:02.049838543Z"
     description: A Helm chart for poolboy
     digest: db777021d37a974640331130c53a8423965f59f0f4a67bcd0bfd4c36f7675422
     name: poolboy
@@ -633,7 +643,7 @@ entries:
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
-    created: "2025-08-29T14:59:38.847587417Z"
+    created: "2025-09-09T13:18:02.049228628Z"
     description: A Helm chart for poolboy
     digest: 681f88692c71c1d75bdb5a3a7f3e5b4141f04648796e4c694077180f8b12063b
     name: poolboy
@@ -643,7 +653,7 @@ entries:
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
-    created: "2025-08-29T14:59:38.846975915Z"
+    created: "2025-09-09T13:18:02.048619364Z"
     description: A Helm chart for poolboy
     digest: b14cab74c1ebc470736591c41161705977224f954ca26663d7ee6c8d8f5372e8
     name: poolboy
@@ -653,7 +663,7 @@ entries:
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
-    created: "2025-08-29T14:59:38.846376094Z"
+    created: "2025-09-09T13:18:02.047998127Z"
     description: A Helm chart for poolboy
     digest: 650d9637fefe718d7abf666fe0b4f0cd9f3bcd54466de4d05b3ba21892825b38
     name: poolboy
@@ -663,7 +673,7 @@ entries:
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
-    created: "2025-08-29T14:59:38.845755244Z"
+    created: "2025-09-09T13:18:02.047392561Z"
     description: A Helm chart for poolboy
     digest: 45ce02411ce46f151284033746a3a9754fa66d25c1389294b82529ffd9501f1b
     name: poolboy
@@ -671,4 +681,4 @@ entries:
     urls:
     - https://redhat-cop.github.io/poolboy/poolboy-0.8.0.tgz
     version: 0.8.0
-generated: "2025-08-29T14:59:38.835634465Z"
+generated: "2025-09-09T13:18:02.036986032Z"
