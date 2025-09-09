@@ -150,15 +150,33 @@ class ResourcePool(KopfObject):
     def __unregister(self) -> None:
         self.instances.pop(self.name, None)
 
-    async def add_resource_handler_label(self):
-        if self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx):
-            await self.merge_patch({
-                "metadata": {
-                    "labels": {
-                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx)
+    async def assign_resource_handler(self):
+        """Apply label to indicate resource handler should manage this ResourcePool.
+        Do not change label on items which are deleting."""
+        if (
+            self.deletion_timestamp is None and
+            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
+        ):
+            try:
+                patch = [{
+                    "op": "test",
+                    "path": "/metadata/deletionTimestamp",
+                    "value": None,
+                }]
+                patch.append({
+                    "op": "add",
+                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
+                    "value": str(self.resource_handler_idx),
+                } if self.labels else {
+                    "op": "add",
+                    "path": f"/metadata/labels",
+                    "value": {
+                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
                     }
-                }
-            })
+                })
+                await self.json_patch(patch)
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                pass
 
     async def get_resource_provider(self) -> ResourceProviderT:
         """Return ResourceProvider configured to manage ResourceHandle."""

@@ -3,6 +3,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import List, Mapping, TypeVar
+from uuid import UUID
 
 import kopf
 import kubernetes_asyncio
@@ -299,6 +300,11 @@ class ResourceClaim(KopfObject):
         return self.status.get('resourceHandle', {}).get('namespace')
 
     @property
+    def resource_handler_idx(self) -> int:
+        """Label value used to select which resource handler pod should manage this ResourceClaim."""
+        return int(UUID(self.uid)) % Poolboy.resource_handler_count
+
+    @property
     def resource_pool_name(self):
         if not self.annotations:
             return None
@@ -339,6 +345,34 @@ class ResourceClaim(KopfObject):
             if 'validationError' in resource:
                 return True
         return False
+
+    async def assign_resource_handler(self):
+        """Apply label to indicate resource handler should manage this ResourceClaim.
+        Do not change label on items which are deleting."""
+        if (
+            self.deletion_timestamp is None and
+            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
+        ):
+            try:
+                patch = [{
+                    "op": "test",
+                    "path": "/metadata/deletionTimestamp",
+                    "value": None,
+                }]
+                patch.append({
+                    "op": "add",
+                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
+                    "value": str(self.resource_handler_idx),
+                } if self.labels else {
+                    "op": "add",
+                    "path": f"/metadata/labels",
+                    "value": {
+                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
+                    }
+                })
+                await self.json_patch(patch)
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                pass
 
     async def bind_resource_handle(self,
         logger: kopf.ObjectLogger,

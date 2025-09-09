@@ -999,15 +999,33 @@ class ResourceHandle(KopfObject):
         else:
             self.status['resources'][resource_index]['state'] = value
 
-    async def add_resource_handler_label(self):
-        if self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx):
-            await self.merge_patch({
-                "metadata": {
-                    "labels": {
-                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx)
+    async def assign_resource_handler(self):
+        """Apply label to indicate resource handler should manage this ResourceHandle.
+        Do not change label on items which are deleting."""
+        if (
+            self.deletion_timestamp is None and
+            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
+        ):
+            try:
+                patch = [{
+                    "op": "test",
+                    "path": "/metadata/deletionTimestamp",
+                    "value": None,
+                }]
+                patch.append({
+                    "op": "add",
+                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
+                    "value": str(self.resource_handler_idx),
+                } if self.labels else {
+                    "op": "add",
+                    "path": f"/metadata/labels",
+                    "value": {
+                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
                     }
-                }
-            })
+                })
+                await self.json_patch(patch)
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                pass
 
     async def get_resource_claim(self, not_found_okay: bool) -> ResourceClaimT|None:
         if not self.is_bound:

@@ -53,8 +53,9 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     await ResourceProvider.preload(logger=logger)
 
     # Preload for matching ResourceClaim templates
-    if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_manager:
+    if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_resource_handler:
         await ResourceHandle.preload(logger=logger)
+
 
 
 @kopf.on.cleanup()
@@ -76,8 +77,61 @@ labels_arg = {
 if Poolboy.operator_mode_resource_handler:
     labels_arg[Poolboy.resource_handler_idx_label] = str(Poolboy.resource_handler_idx)
 
-# Only deal with ResourceClaims in manager or all-in-one mode
-if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_manager:
+if Poolboy.operator_mode_manager:
+    # In manager mode just label ResourceClaims, ResourceHandles, and ResourcePools
+    # to assign the correct handler.
+    @kopf.on.event(
+        ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
+        labels=labels_arg,
+    )
+    async def label_resource_claim(
+        event: Mapping,
+        logger: kopf.ObjectLogger,
+        **_
+    ) -> None:
+        definition = event['object']
+        if event['type'] == 'DELETED':
+            return
+        resource_claim = ResourceClaim.from_definition(definition)
+        await resource_claim.assign_resource_handler()
+
+    @kopf.on.event(
+        ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
+        labels=labels_arg,
+    )
+    async def label_resource_handle(
+        event: Mapping,
+        logger: kopf.ObjectLogger,
+        **_
+    ) -> None:
+        definition = event['object']
+        if event['type'] == 'DELETED':
+            return
+        resource_handle = ResourceHandle.from_definition(definition)
+        await resource_handle.assign_resource_handler()
+
+    @kopf.on.event(
+        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
+        labels=labels_arg,
+    )
+    async def label_resource_pool(
+        event: Mapping,
+        logger: kopf.ObjectLogger,
+        **_
+    ) -> None:
+        definition = event['object']
+        if event['type'] == 'DELETED':
+            return
+        resource_pool = ResourcePool.from_definition(definition)
+        await resource_pool.assign_resource_handler()
+
+if(
+    Poolboy.operator_mode_all_in_one or
+    Poolboy.operator_mode_resource_handler
+):
+    # Resources are handled in either all-in-one or resource-handler mode.
+    # The difference is only if labels are used to select which resources to handle.
+
     @kopf.on.create(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
         id='resource_claim_create', labels=labels_arg,
@@ -185,50 +239,24 @@ if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_manager:
         except asyncio.CancelledError:
             pass
 
-if Poolboy.operator_mode_manager:
-    # In manager mode ResourceHandles just need to be tracked for claim binding
-    # and assigned to the correct handler.
-    @kopf.on.event(
-        ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-    )
-    async def resource_handle_event(
-        event: Mapping,
-        logger: kopf.ObjectLogger,
-        **_
-    ) -> None:
-        definition = event['object']
-        if(
-            event['type'] == 'DELETED' or
-            'deletionTimestamp' in definition['metadata']
-        ):
-            await ResourceHandle.unregister(definition['metadata']['name'])
-        else:
-            resource_handle = await ResourceHandle.register_definition(definition)
-            await resource_handle.add_resource_handler_label()
+    if Poolboy.operator_mode_resource_handler:
+        @kopf.on.event(
+            ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
+            id='resource_handle_register',
+            labels={Poolboy.ignore_label: kopf.ABSENT},
+        )
+        async def resource_handle_register(
+            event: Mapping,
+            logger: kopf.ObjectLogger,
+            **_
+        ) -> None:
+            """Track ResourceHandles managed by other handlers."""
+            definition = event['object']
+            if event['type'] == 'DELETED':
+                await ResourceHandle.unregister(name=definition['metadata']['name'], logger=logger)
+            else:
+                await ResourceHandle.register_definition(definition=definition)
 
-    @kopf.on.event(
-        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
-    )
-    async def resource_pool_event(
-        event: Mapping,
-        logger: kopf.ObjectLogger,
-        **_
-    ) -> None:
-        definition = event['object']
-        if(
-            event['type'] == 'DELETED' or
-            'deletionTimestamp' in definition['metadata']
-        ):
-            return
-        resource_pool = ResourcePool.from_definition(definition)
-        await resource_pool.add_resource_handler_label()
-
-
-# In all-in-one and resource-handler mode ResourceHandles must be handled.
-if(
-    Poolboy.operator_mode_all_in_one or
-    Poolboy.operator_mode_resource_handler
-):
     @kopf.on.create(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
         id='resource_handle_create', labels=labels_arg,
@@ -265,13 +293,7 @@ if(
         )
         if resource_handle.ignore:
             return
-        if Poolboy.operator_mode_manager:
-            await resource_handle.add_resource_handler_label()
-        elif (
-            Poolboy.operator_mode_all_in_one or
-            Poolboy.operator_mode_resource_handler
-        ):
-            await resource_handle.manage(logger=logger)
+        await resource_handle.manage(logger=logger)
 
     @kopf.on.delete(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
