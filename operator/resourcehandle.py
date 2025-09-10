@@ -654,7 +654,6 @@ class ResourceHandle(KopfObject):
 
     @classmethod
     async def __watch_other(cls, logger) -> None:
-        logger.info("HERE")
         watch = kubernetes_asyncio.watch.Watch()
         async for event in watch.stream(
             Poolboy.custom_objects_api.list_namespaced_custom_object,
@@ -664,7 +663,6 @@ class ResourceHandle(KopfObject):
             plural=cls.plural,
             version=cls.api_version,
         ):
-            logger.info(f"EVENT {event}")
             event_obj = event['object']
             event_type = event['type']
             if event_type == 'DELETED':
