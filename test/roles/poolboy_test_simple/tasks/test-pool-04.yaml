@@ -80,7 +80,7 @@
     __unbound_handles[0].status.resources[0].healthy != false
   until: r_get_resource_handles is success
   delay: 1
-  retries: 10
+  retries: 15
 
 - name: Set facts from for ResourcePool test-pool-04 ResourceHandles
   vars:

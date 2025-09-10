@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -81,6 +82,7 @@ class ResourceHandle(KopfObject):
     bound_instances = {}
     unbound_instances = {}
     class_lock = asyncio.Lock()
+    watch_other_task = None
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceHandleT:
@@ -521,6 +523,11 @@ class ResourceHandle(KopfObject):
         return cls.all_instances.get(name)
 
     @classmethod
+    def start_watch_other(cls) -> None:
+        logger = logging.getLogger('watch_other_handles')
+        cls.watch_other_task = asyncio.create_task(cls.watch_other(logger))
+
+    @classmethod
     async def get_unbound_handles_for_pool(
         cls,
         resource_pool: ResourcePoolT,
@@ -617,12 +624,53 @@ class ResourceHandle(KopfObject):
             return cls.__register_definition(definition)
 
     @classmethod
+    async def stop_watch_other(cls) -> None:
+        if cls.watch_other_task is None:
+            return
+        cls.watch_other_task.cancel()
+        await cls.watch_other_task
+
+    @classmethod
     async def unregister(cls, name: str) -> ResourceHandleT|None:
         async with cls.class_lock:
             resource_handle = cls.all_instances.pop(name, None)
             if resource_handle:
                 resource_handle.__unregister()
                 return resource_handle
+
+    @classmethod
+    async def watch_other(cls, logger) -> None:
+        while True:
+            try:
+                # FIXME - clear stale cache entries
+                await cls.__watch_other(logger)
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                if exception.status != 410:
+                    logger.exception("Error watching other resourcehandles")
+                    await asyncio.sleep(10)
+            except:
+                logger.exception("Error watching other resourcehandles")
+                await asyncio.sleep(10)
+
+    @classmethod
+    async def __watch_other(cls, logger) -> None:
+        logger.info("HERE")
+        watch = kubernetes_asyncio.watch.Watch()
+        async for event in watch.stream(
+            Poolboy.custom_objects_api.list_namespaced_custom_object,
+            group=cls.api_group,
+            label_selector=f"!{Poolboy.ignore_label},{Poolboy.resource_handler_idx_label}!={Poolboy.resource_handler_idx}",
+            namespace=Poolboy.namespace,
+            plural=cls.plural,
+            version=cls.api_version,
+        ):
+            logger.info(f"EVENT {event}")
+            event_obj = event['object']
+            event_type = event['type']
+            if event_type == 'DELETED':
+                await cls.unregister(event_obj['metadata']['name'])
+            else:
+                await cls.register_definition(event_obj)
 
     def __str__(self) -> str:
         return f"ResourceHandle {self.name}"
@@ -833,44 +881,63 @@ class ResourceHandle(KopfObject):
             raise kopf.TemporaryError(f"Failed to parse {name} time interval: {value}", delay=60)
         return timedelta(seconds=seconds)
 
-    async def __manage_init_status_resources(self) -> None:
+    async def __manage_init_status_resources(self,
+        logger: kopf.ObjectLogger,
+    ) -> None:
         """Initialize resources in status from spec."""
-        patch = []
-        if not self.status:
-            patch.append({
-                "op": "add",
-                "path": "/status",
-                "value": {},
-            })
-        status_resources = self.status.get('resources', [])
-        if 'resources' not in self.status:
-            patch.append({
-                "op": "add",
-                "path": "/status/resources",
-                "value": [],
-            })
-        for idx, resource in enumerate(self.resources):
-            if idx < len(status_resources):
-                status_resource = status_resources[idx]
-            else:
-                status_resource = {}
-                status_resources.append(status_resource)
-                patch.append({
-                    "op": "add",
-                    "path": f"/status/resources/{idx}",
-                    "value": {},
-                })
+        attempt = 0
+        while True:
+            try:
+                set_resources = []
+                for idx, resource in enumerate(self.resources):
+                    if idx < len(self.status_resources):
+                        entry = deepcopy(self.status_resources[idx])
+                    else:
+                        entry = {}
+                    if 'name' in resource and resource['name'] != entry.get('name'):
+                        entry['name'] = resource['name']
+                    set_resources.append(entry)
 
-            if 'name' in resource and resource['name'] != status_resource.get('name'):
-                status_resource['name'] = resource['name']
-                patch.append({
-                    "op": "add",
-                    "path": f"/status/resources/{idx}/name",
-                    "value": resource['name'],
-                })
-
-        if patch:
-            await self.json_patch_status(patch)
+                patch = []
+                if not self.status:
+                    patch.extend(({
+                        "op": "test",
+                        "path": "/status",
+                        "value": None,
+                    }, {
+                        "op": "add",
+                        "path": "/status",
+                        "value": {},
+                    }))
+                if 'resources' not in self.status:
+                    patch.extend(({
+                        "op": "test",
+                        "path": "/status/resources",
+                        "value": None,
+                    }, {
+                        "op": "add",
+                        "path": "/status/resources",
+                        "value": set_resources,
+                    }))
+                else:
+                    patch.extend(({
+                        "op": "test",
+                        "path": "/status/resources",
+                        "value": self.status_resources,
+                    }, {
+                        "op": "replace",
+                        "path": "/status/resources",
+                        "value": set_resources,
+                    }))
+                if 0 == len(patch):
+                    return
+                await self.json_patch_status(patch)
+                return
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                if attempt > 2:
+                    logger.exception(f"{self} failed status patch: {patch}")
+                    raise
+                attempt += 1
 
     async def __manage_check_delete(self,
         logger: kopf.ObjectLogger,
@@ -1147,7 +1214,7 @@ class ResourceHandle(KopfObject):
             )
 
             # Initialize status.resources
-            await self.__manage_init_status_resources()
+            await self.__manage_init_status_resources(logger=logger)
 
             # Get resource providers for managed resources
             resource_providers = await self.get_resource_providers()
@@ -1360,6 +1427,14 @@ class ResourceHandle(KopfObject):
         """Update status from resources state."""
         status = self.status
 
+        while len(self.resources) < len(resource_states):
+            logger.warning(f"{self} update status with resource states longer that list of resources, attempting refetch: {len(self.resources)} < {len(resource_states)}")
+            await asyncio.sleep(0.2)
+            await self.refetch()
+            if len(self.resources) < len(resource_states):
+                logger.error(f"{self} update status with resource states longer that list of resources after refetch: {len(self.resources)} < {len(resource_states)}")
+                return
+
         # Create consolidated information about resources
         resources = deepcopy(self.resources)
         for idx, state in enumerate(resource_states):
@@ -1371,32 +1446,9 @@ class ResourceHandle(KopfObject):
         have_ready_resource = False
         all_resources_ready = True
 
-        if not status:
-            patch.append({
-                "op": "add",
-                "path": "/status",
-                "value": {},
-            })
-        status_resources = status.get('resources')
-        if status_resources is None:
-            status_resources = []
-            patch.append({
-                "op": "add",
-                "path": "/status/resources",
-                "value": [],
-            })
-
+        status_resources = status.get('resources', [])
         for idx, resource in enumerate(resources):
-            if idx < len(status_resources):
-                status_resource = status_resources[idx]
-            else:
-                status_resource = {}
-                patch.append({
-                    "op": "add",
-                    "path": f"/status/resources/{idx}",
-                    "value": {},
-                })
-
+            status_resource = status_resources[idx] if idx < len(status_resources) else {}
             resource_healthy = None
             resource_ready = False
 
@@ -1508,7 +1560,16 @@ class ResourceHandle(KopfObject):
             except Exception:
                 logger.exception(f"Failed to generate status summary for {self}")
         if patch:
-            await self.json_patch_status(patch)
+            while True:
+                try:
+                    await self.json_patch_status(patch)
+                    break
+                except kubernetes_asyncio.client.exceptions.ApiException:
+                    patch_attempt += 1
+                    if patch_attempt > 5:
+                        logger.exception(f"Failed to patch status on {self}")
+                        return
+                    await asyncio.sleep(0.2)
 
         if resource_claim:
             await resource_claim.update_status_from_handle(
