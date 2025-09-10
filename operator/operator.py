@@ -55,11 +55,13 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     # Preload for matching ResourceClaim templates
     if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_resource_handler:
         await ResourceHandle.preload(logger=logger)
-
-
+    if Poolboy.operator_mode_resource_handler:
+        ResourceHandle.start_watch_other()
 
 @kopf.on.cleanup()
 async def cleanup(logger: kopf.ObjectLogger, **_):
+    if Poolboy.operator_mode_resource_handler:
+        ResourceHandle.stop_watch_other()
     await ResourceWatch.stop_all()
     await Poolboy.on_cleanup()
 
@@ -71,18 +73,16 @@ async def resource_provider_event(event: Mapping, logger: kopf.ObjectLogger, **_
     else:
         await ResourceProvider.register(definition=definition, logger=logger)
 
-labels_arg = {
-    Poolboy.ignore_label: kopf.ABSENT,
-}
+label_selector = f"!{Poolboy.ignore_label}"
 if Poolboy.operator_mode_resource_handler:
-    labels_arg[Poolboy.resource_handler_idx_label] = str(Poolboy.resource_handler_idx)
+    label_selector += f",{Poolboy.resource_handler_idx_label}={Poolboy.resource_handler_idx}"
 
 if Poolboy.operator_mode_manager:
     # In manager mode just label ResourceClaims, ResourceHandles, and ResourcePools
     # to assign the correct handler.
     @kopf.on.event(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def label_resource_claim(
         event: Mapping,
@@ -97,7 +97,7 @@ if Poolboy.operator_mode_manager:
 
     @kopf.on.event(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def label_resource_handle(
         event: Mapping,
@@ -112,7 +112,7 @@ if Poolboy.operator_mode_manager:
 
     @kopf.on.event(
         ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def label_resource_pool(
         event: Mapping,
@@ -134,15 +134,18 @@ if(
 
     @kopf.on.create(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
-        id='resource_claim_create', labels=labels_arg,
+        label_selector=label_selector,
+        id='resource_claim_create',
     )
     @kopf.on.resume(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
-        id='resource_claim_resume', labels=labels_arg,
+        label_selector=label_selector,
+        id='resource_claim_resume',
     )
     @kopf.on.update(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
-        id='resource_claim_update', labels=labels_arg,
+        label_selector=label_selector,
+        id='resource_claim_update',
     )
     async def resource_claim_event(
         annotations: kopf.Annotations,
@@ -170,7 +173,7 @@ if(
 
     @kopf.on.delete(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def resource_claim_delete(
         annotations: kopf.Annotations,
@@ -201,7 +204,7 @@ if(
         ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
         cancellation_timeout = 1,
         initial_delay = Poolboy.manage_handles_interval,
-        labels = labels_arg,
+        label_selector=label_selector,
     )
     async def resource_claim_daemon(
         annotations: kopf.Annotations,
@@ -239,35 +242,20 @@ if(
         except asyncio.CancelledError:
             pass
 
-    if Poolboy.operator_mode_resource_handler:
-        @kopf.on.event(
-            ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-            id='resource_handle_register',
-            labels={Poolboy.ignore_label: kopf.ABSENT},
-        )
-        async def resource_handle_register(
-            event: Mapping,
-            logger: kopf.ObjectLogger,
-            **_
-        ) -> None:
-            """Track ResourceHandles managed by other handlers."""
-            definition = event['object']
-            if event['type'] == 'DELETED':
-                await ResourceHandle.unregister(name=definition['metadata']['name'], logger=logger)
-            else:
-                await ResourceHandle.register_definition(definition=definition)
-
     @kopf.on.create(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-        id='resource_handle_create', labels=labels_arg,
+        id='resource_handle_create',
+        label_selector=label_selector,
     )
     @kopf.on.resume(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-        id='resource_handle_resume', labels=labels_arg,
+        id='resource_handle_resume',
+        label_selector=label_selector,
     )
     @kopf.on.update(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-        id='resource_handle_update', labels=labels_arg,
+        id='resource_handle_update',
+        label_selector=label_selector,
     )
     async def resource_handle_event(
         annotations: kopf.Annotations,
@@ -297,7 +285,7 @@ if(
 
     @kopf.on.delete(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def resource_handle_delete(
         annotations: kopf.Annotations,
@@ -330,7 +318,7 @@ if(
         ResourceHandle.api_group, ResourceHandle.api_version, ResourceHandle.plural,
         cancellation_timeout = 1,
         initial_delay = Poolboy.manage_handles_interval,
-        labels = labels_arg,
+        label_selector=label_selector,
     )
     async def resource_handle_daemon(
         annotations: kopf.Annotations,
@@ -370,15 +358,18 @@ if(
 
     @kopf.on.create(
         ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
-        id='resource_pool_create', labels=labels_arg,
+        id='resource_pool_create',
+        label_selector=label_selector,
     )
     @kopf.on.resume(
         ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
-        id='resource_pool_resume', labels=labels_arg,
+        id='resource_pool_resume',
+        label_selector=label_selector,
     )
     @kopf.on.update(
         ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
-        id='resource_pool_update', labels=labels_arg,
+        id='resource_pool_update',
+        label_selector=label_selector,
     )
     async def resource_pool_event(
         annotations: kopf.Annotations,
@@ -406,7 +397,7 @@ if(
 
     @kopf.on.delete(
         Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
-        labels=labels_arg,
+        label_selector=label_selector,
     )
     async def resource_pool_delete(
         annotations: kopf.Annotations,
@@ -436,7 +427,7 @@ if(
     @kopf.daemon(Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
         cancellation_timeout = 1,
         initial_delay = Poolboy.manage_pools_interval,
-        labels = labels_arg,
+        label_selector=label_selector,
     )
     async def resource_pool_daemon(
         annotations: kopf.Annotations,
@@ -477,11 +468,13 @@ if (
 ):
     @kopf.on.create(
         Poolboy.operator_domain, Poolboy.operator_version, 'resourcewatches',
-        id='resource_watch_create', labels=labels_arg,
+        id='resource_watch_create',
+        label_selector=label_selector,
     )
     @kopf.on.resume(
         Poolboy.operator_domain, Poolboy.operator_version, 'resourcewatches',
-        id='resource_watch_resume', labels=labels_arg,
+        id='resource_watch_resume',
+        label_selector=label_selector,
     )
     async def resource_watch_create_or_resume(
         annotations: kopf.Annotations,
