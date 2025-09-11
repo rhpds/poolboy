@@ -67,6 +67,7 @@ async def cleanup(logger: kopf.ObjectLogger, **_):
         ResourceHandle.stop_watch_other()
     await ResourceWatch.stop_all()
     await Poolboy.on_cleanup()
+    await MetricsService.stop()
 
 @kopf.on.event(Poolboy.operator_domain, Poolboy.operator_version, 'resourceproviders')
 async def resource_provider_event(event: Mapping, logger: kopf.ObjectLogger, **_) -> None:
