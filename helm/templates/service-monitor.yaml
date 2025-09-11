@@ -8,13 +8,13 @@ metadata:
     {{- include "poolboy.labels" . | nindent 4 }}
 spec:
   selector:
-  matchLabels:
-    {{- include "poolboy.selectorLabels" . | nindent 6 }}
+    matchLabels:
+      {{- include "poolboy.selectorLabels" . | nindent 6 }}
   namespaceSelector:
     matchNames:
     - {{ include "poolboy.namespaceName" . }}
   endpoints:
-  - port: prometheus
+  - port: metrics
     interval: "30s"
     path: /metrics
 {{- end }}

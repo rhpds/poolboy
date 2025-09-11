@@ -1,11 +1,11 @@
 import inspect
+import os
 import time
 from functools import wraps
 
-from config import config
-
 from .app_metrics import AppMetrics
 
+cluster_domain = os.environ.get('CLUSTER_DOMAIN')
 
 def async_timer(app: str):
     def decorator(func):
@@ -25,7 +25,7 @@ def async_timer(app: str):
                 labels = {'method': method_name,
                           'status': status,
                           'app': app,
-                          'cluster_domain': config.cluster_domain
+                          'cluster_domain': cluster_domain
                           }
                 AppMetrics.process_time.observe(labels, duration)
 
@@ -51,7 +51,7 @@ def sync_timer(app: str):
                 labels = {'method': method_name,
                           'status': status,
                           'app': app,
-                          'cluster_domain': config.cluster_domain
+                          'cluster_domain': cluster_domain
                           }
                 AppMetrics.process_time.observe(labels, duration)
 

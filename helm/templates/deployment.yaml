@@ -21,6 +21,8 @@ spec:
       containers:
         - name: manager
           env:
+          - name: CLUSTER_DOMAIN
+            value: "{{ .Values.clusterDomain }}"
           - name: MANAGE_CLAIMS_INTERVAL
             value: "{{ .Values.manageClaimsInterval }}"
           - name: MANAGE_HANDLES_INTERVAL
@@ -59,8 +61,10 @@ spec:
               port: 8080
             timeoutSeconds: 1
           ports:
+          - name: kopf
+            containerPort: 8080
           - name: metrics
-            containerPort: 8000
+            containerPort: 9091
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
