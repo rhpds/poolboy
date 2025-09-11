@@ -72,12 +72,12 @@ serviceAccount:
 
 service:
   type: ClusterIP
-  port: 8000
   ports:
   - name: metrics
-    port: 8000
+    port: 9091
+    prometheus: 9091
     protocol: TCP
-    targetPort: 8000
+    targetPort: 9091
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -96,3 +96,6 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+clusterDomain: unknown
+enablePrometheusMetrics: true

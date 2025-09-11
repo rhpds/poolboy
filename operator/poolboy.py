@@ -1,13 +1,15 @@
 import os
-import yaml
-
 from copy import deepcopy
 from uuid import UUID
 
 import kopf
 import kubernetes_asyncio
+import yaml
+
 
 class Poolboy():
+    metrics_enabled = os.environ.get('METRICS_ENABLED', 'true').lower() == 'true'
+    metrics_port = int(os.environ.get('METRICS_PORT', 9091))
     manage_claims_interval = int(os.environ.get('MANAGE_CLAIMS_INTERVAL', 60))
     manage_handles_interval = int(os.environ.get('MANAGE_HANDLES_INTERVAL', 60))
     manage_pools_interval = int(os.environ.get('MANAGE_POOLS_INTERVAL', 10))
