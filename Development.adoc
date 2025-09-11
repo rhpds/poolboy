@@ -114,8 +114,9 @@ helm template helm \
 --set manageClaimsInterval=5 \
 --set manageHandlesInterval=5 \
 --set operatorDomain.name=poolboy.dev.local \
---set=image.tagOverride=- \
---set=image.repository=$(oc get imagestream poolboy -o jsonpath='{.status.tags[?(@.tag=="latest")].items[0].dockerImageReference}') \
+--set resourceHandlerCount=2 \
+--set image.tagOverride=- \
+--set image.repository=$(oc get imagestream poolboy -o jsonpath='{.status.tags[?(@.tag=="latest")].items[0].dockerImageReference}') \
 | oc apply -f -
 --------------------------------------------------------------------------------
 

@@ -68,7 +68,7 @@ class _LinkedResourceProvider:
             )
 
         return recursive_process_template_strings(
-            '{{(' + self.wait_for + ')|bool}}', resource_provider.template_style,
+            '{{(' + self.wait_for + ')|bool}}',
             variables = vars_,
             template_variables = {**resource_provider.vars, **resource_handle.vars},
         )
@@ -92,7 +92,7 @@ class _LinkedResourceProvider:
         resource_handle_vars = resource_handle.vars if resource_handle else {}
 
         return recursive_process_template_strings(
-            '{{(' + self.when + ')|bool}}', resource_provider.template_style,
+            '{{(' + self.when + ')|bool}}',
             variables = {
                 **parameter_values,
                 "resource_claim": resource_claim,
@@ -355,10 +355,6 @@ class ResourceProvider:
         return self.spec.get('template', {}).get('enable', False)
 
     @property
-    def template_style(self) -> str:
-        return self.spec.get('template', {}).get('style', 'jinja2')
-
-    @property
     def vars(self) -> Mapping:
         return self.spec.get('vars', {})
 
@@ -402,7 +398,6 @@ class ResourceProvider:
                     template,
                     recursive_process_template_strings(
                         template = self.spec['default'],
-                        template_style = self.template_style,
                         variables = {
                             "resource_claim": resource_claim,
                             "resource_index": resource_index,
@@ -699,7 +694,7 @@ class ResourceProvider:
                 deep_merge(
                     resource_definition,
                     recursive_process_template_strings(
-                        self.override, self.template_style,
+                        self.override,
                         variables = all_vars,
                         template_variables = {**self.vars, **resource_handle_vars}
                     )
