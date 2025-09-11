@@ -53,8 +53,6 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     # Preload configuration from ResourceProviders
     await ResourceProvider.preload(logger=logger)
 
-
-
     # Preload for matching ResourceClaim templates
     if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_resource_handler:
         await ResourceHandle.preload(logger=logger)

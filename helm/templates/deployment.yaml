@@ -43,6 +43,10 @@ spec:
             value: {{ .Values.resourceWatchResources | toJson | quote }}
           {{- end }}
           {{- end }}
+          {{- if .Values.enablePrometheusMetrics}}
+          - name: METRICS_ENABLED
+            value: "true"
+          {{- end }}
           - name: RESOURCE_REFRESH_INTERVAL
             value: "{{ .Values.resourceRefreshInterval }}"
           image: "{{ include "poolboy.image" . }}"
