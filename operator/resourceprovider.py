@@ -1,20 +1,19 @@
 import asyncio
+import re
+from copy import deepcopy
+from datetime import timedelta
+from typing import List, Mapping, TypeVar
+
 import jinja2
 import jsonpointer
 import kopf
-import pytimeparse
-import re
-
-from copy import deepcopy
-from datetime import timedelta
-from openapi_schema_validator import OAS30Validator
-from openapi_schema_util import defaults_from_schema
-from typing import List, Mapping, TypeVar
-
 import poolboy_k8s
-
+import pytimeparse
 from deep_merge import deep_merge
 from jsonpatch_from_diff import jsonpatch_from_diff
+from metrics.timer_decorator import TimerDecoratorMeta
+from openapi_schema_util import defaults_from_schema
+from openapi_schema_validator import OAS30Validator
 from poolboy import Poolboy
 from poolboy_templating import check_condition, recursive_process_template_strings
 
@@ -144,7 +143,7 @@ class _ValidationException(Exception):
     pass
 
 
-class ResourceProvider:
+class ResourceProvider(metaclass=TimerDecoratorMeta):
     instances = {}
     lock = asyncio.Lock()
 
@@ -167,11 +166,11 @@ class ResourceProvider:
             if provider.is_match_for_template(template):
                 provider_matches.append(provider)
         if len(provider_matches) == 0:
-            raise kopf.TemporaryError(f"Unable to match template to ResourceProvider", delay=60)
+            raise kopf.TemporaryError("Unable to match template to ResourceProvider", delay=60)
         elif len(provider_matches) == 1:
             return provider_matches[0]
         else:
-            raise kopf.TemporaryError(f"Resource template matches multiple ResourceProviders", delay=600)
+            raise kopf.TemporaryError("Resource template matches multiple ResourceProviders", delay=600)
 
     @classmethod
     async def get(cls, name: str) -> ResourceProviderT:
@@ -736,9 +735,9 @@ class ResourceProvider:
             if 'namespace' in resource_reference:
                 resource_definition['metadata']['namespace'] = resource_reference['namespace']
             if resource_definition['apiVersion'] != resource_reference['apiVersion']:
-                raise kopf.TemporaryError(f"Unable to change apiVersion for resource!", delay=600)
+                raise kopf.TemporaryError("Unable to change apiVersion for resource!", delay=600)
             if resource_definition['kind'] != resource_reference['kind']:
-                raise kopf.TemporaryError(f"Unable to change kind for resource!", delay=600)
+                raise kopf.TemporaryError("Unable to change kind for resource!", delay=600)
 
         if 'annotations' not in resource_definition['metadata']:
             resource_definition['metadata']['annotations'] = {}

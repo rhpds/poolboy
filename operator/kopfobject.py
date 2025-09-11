@@ -1,14 +1,14 @@
 import asyncio
-
-from datetime import datetime, timezone
-from typing import List, Mapping, TypeVar
+from datetime import datetime
+from typing import List, Mapping
 
 import kopf
 import kubernetes_asyncio
-
+from metrics.timer_decorator import TimerDecoratorMeta
 from poolboy import Poolboy
 
-class KopfObject:
+
+class KopfObject(metaclass=TimerDecoratorMeta):
     @classmethod
     def from_definition(cls, definition):
         return cls(

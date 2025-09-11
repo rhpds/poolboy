@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
-
-from datetime import datetime
 from typing import Mapping
 
 import kopf
-
-from poolboy import Poolboy
 from configure_kopf_logging import configure_kopf_logging
 from infinite_relative_backoff import InfiniteRelativeBackoff
-
+from metrics import MetricsService
+from poolboy import Poolboy
 from resourceclaim import ResourceClaim
 from resourcehandle import ResourceHandle
 from resourcepool import ResourcePool
@@ -49,8 +46,14 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
 
     await Poolboy.on_startup(logger=logger)
 
+    if Poolboy.metrics_enabled:
+        # Start metrics service
+        await MetricsService.start(port=Poolboy.metrics_port)
+
     # Preload configuration from ResourceProviders
     await ResourceProvider.preload(logger=logger)
+
+
 
     # Preload for matching ResourceClaim templates
     if Poolboy.operator_mode_all_in_one or Poolboy.operator_mode_resource_handler:
