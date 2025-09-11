@@ -10,6 +10,7 @@ import kopf
 from poolboy import Poolboy
 from configure_kopf_logging import configure_kopf_logging
 from infinite_relative_backoff import InfiniteRelativeBackoff
+from profiling import profiler
 
 from resourceclaim import ResourceClaim
 from resourcehandle import ResourceHandle
@@ -47,6 +48,10 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     # Configure logging
     configure_kopf_logging()
 
+    # Initialize profiler (sets up signal handlers)
+    # Use SIGUSR1 to start profiling, SIGUSR2 to stop profiling
+    profiler  # Just reference it to initialize signal handlers
+
     await Poolboy.on_startup(logger=logger)
 
     # Preload configuration from ResourceProviders
@@ -64,6 +69,9 @@ async def cleanup(logger: kopf.ObjectLogger, **_):
         ResourceHandle.stop_watch_other()
     await ResourceWatch.stop_all()
     await Poolboy.on_cleanup()
+    
+    # Cleanup profiler
+    profiler.cleanup()
 
 @kopf.on.event(Poolboy.operator_domain, Poolboy.operator_version, 'resourceproviders')
 async def resource_provider_event(event: Mapping, logger: kopf.ObjectLogger, **_) -> None:
