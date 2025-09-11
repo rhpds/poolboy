@@ -78,6 +78,9 @@ service:
     port: 8000
     protocol: TCP
     targetPort: 8000
+  - prometheus: 9091
+    protocol: TCP
+    targetPort: 9091
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
