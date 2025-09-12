@@ -2,7 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "poolboy.name" . }}-monitor
+  name: {{ include "poolboy.name" . }}-metrics
   namespace: {{ include "poolboy.namespaceName" . }}
   labels:
     {{- include "poolboy.labels" . | nindent 4 }}
@@ -17,4 +17,11 @@ spec:
   - port: metrics
     interval: "30s"
     path: /metrics
+    basicAuth:
+      username:
+        name: {{ include "poolboy.name" . }}-metrics-credentials
+        key: metrics_username
+      password:
+        name: {{ include "poolboy.name" . }}-metrics-credentials
+        key: metrics_password
 {{- end }}
