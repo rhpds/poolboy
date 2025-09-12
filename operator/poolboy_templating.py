@@ -201,7 +201,7 @@ def jinja2process(template, omit=None, variables={}, template_variables={}):
         '''Variable may contain template string referencing other variables.'''
         def __init__(self, value):
             self.value = value
-            self.j2template = j2template_get(value) if '{{' in value else None
+            self.j2template = j2template_get(value) if '{{' in value or '{%' in value else None
 
         def get_typed_value(self):
             if self.j2template:
