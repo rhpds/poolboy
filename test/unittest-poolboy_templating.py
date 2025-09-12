@@ -623,5 +623,17 @@ class TestJsonPatch(unittest.TestCase):
             True
         )
 
+    def test_46(self):
+        template = "{% if show_a %}a{% endif %}"
+        template_variables = {
+            "show_a": True,
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, template_variables=template_variables
+            ),
+            "a",
+        )
+
 if __name__ == '__main__':
     unittest.main()
