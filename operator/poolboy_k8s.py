@@ -1,10 +1,9 @@
-import asyncio
+from typing import List, Mapping
+
 import inflection
 import kopf
 import kubernetes_asyncio
-
-from typing import List, Mapping
-
+from metrics.timer_decorator import async_timer
 from poolboy import Poolboy
 
 api_groups = {}
@@ -12,18 +11,21 @@ api_groups = {}
 class KindNotFoundException(Exception):
     pass
 
+@async_timer(app="PoolboyK8s")
 async def create_object(definition: Mapping) -> Mapping:
     if '/' in definition['apiVersion']:
         return await create_custom_object(definition)
     else:
         return await create_core_object(definition)
 
+@async_timer(app="PoolboyK8s")
 async def create_core_object(definition: Mapping) -> Mapping:
     if 'namespace' in definition['metadata']:
         return await create_namespaced_core_object(definition)
     else:
         return await create_cluster_core_object(definition)
 
+@async_timer(app="PoolboyK8s")
 async def create_custom_object(definition: Mapping) -> Mapping:
     group, version = definition['apiVersion'].split('/')
     plural = await kind_to_plural(group=group, kind=definition['kind'], version=version)
@@ -44,6 +46,7 @@ async def create_custom_object(definition: Mapping) -> Mapping:
             version = version,
         )
 
+@async_timer(app="PoolboyK8s")
 async def create_cluster_core_object(definition: Mapping) -> Mapping:
     kind = definition['kind']
     method = getattr(
@@ -54,6 +57,7 @@ async def create_cluster_core_object(definition: Mapping) -> Mapping:
         await method(body=definition)
     )
 
+@async_timer(app="PoolboyK8s")
 async def create_namespaced_core_object(definition: Mapping) -> Mapping:
     kind = definition['kind']
     namespace = definition['metadata']['namespace']
@@ -65,6 +69,7 @@ async def create_namespaced_core_object(definition: Mapping) -> Mapping:
         await method(body=definition, namespace=namespace)
     )
 
+@async_timer(app="PoolboyK8s")
 async def delete_core_object(
     kind: str,
     name: str,
@@ -82,6 +87,7 @@ async def delete_core_object(
             name = name,
         )
 
+@async_timer(app="PoolboyK8s")
 async def delete_cluster_core_object(
     kind: str,
     name: str,
@@ -94,6 +100,7 @@ async def delete_cluster_core_object(
         await method(name=name)
     )
 
+@async_timer(app="PoolboyK8s")
 async def delete_namespaced_core_object(
     kind: str,
     name: str,
@@ -107,6 +114,7 @@ async def delete_namespaced_core_object(
         await method(name=name, namespace=namespace)
     )
 
+@async_timer(app="PoolboyK8s")
 async def delete_custom_object(
     group: str,
     version: str,
@@ -131,6 +139,7 @@ async def delete_custom_object(
             version = version,
         )
 
+@async_timer(app="PoolboyK8s")
 async def delete_object(
     api_version: str,
     kind: str,
@@ -153,6 +162,7 @@ async def delete_object(
             namespace = namespace
         )
 
+@async_timer(app="PoolboyK8s")
 async def get_object(
     api_version: str,
     kind: str,
@@ -175,6 +185,7 @@ async def get_object(
             namespace = namespace
         )
 
+@async_timer(app="PoolboyK8s")
 async def get_core_object(
     kind: str,
     name: str,
@@ -192,6 +203,7 @@ async def get_core_object(
             name = name,
         )
 
+@async_timer(app="PoolboyK8s")
 async def get_cluster_core_object(
     kind: str,
     name: str,
@@ -204,6 +216,7 @@ async def get_cluster_core_object(
         await method(name=name)
     )
 
+@async_timer(app="PoolboyK8s")
 async def get_namespaced_core_object(
     kind: str,
     name: str,
@@ -217,6 +230,7 @@ async def get_namespaced_core_object(
         await method(name=name, namespace=namespace)
     )
 
+@async_timer(app="PoolboyK8s")
 async def get_custom_object(
     group: str,
     version: str,
@@ -241,6 +255,7 @@ async def get_custom_object(
             version = version,
         )
 
+@async_timer(app="PoolboyK8s")
 async def get_requester_from_namespace(namespace: str) -> tuple[Mapping|None, List[Mapping]|None]:
     try:
         namespace_obj = await Poolboy.core_v1_api.read_namespace(namespace)
@@ -290,7 +305,7 @@ async def get_requester_from_namespace(namespace: str) -> tuple[Mapping|None, Li
 
     return user, identities
 
-
+@async_timer(app="PoolboyK8s")
 async def kind_to_plural(
     group: str,
     kind: str,
@@ -336,6 +351,7 @@ async def kind_to_plural(
         delay=600
     )
 
+@async_timer(app="PoolboyK8s")
 async def patch_core_object(
     kind: str,
     name: str,
@@ -356,6 +372,7 @@ async def patch_core_object(
             patch = patch,
         )
 
+@async_timer(app="PoolboyK8s")
 async def patch_cluster_core_object(
     kind: str,
     name: str,
@@ -373,6 +390,7 @@ async def patch_cluster_core_object(
         )
     )
 
+@async_timer(app="PoolboyK8s")
 async def patch_namespaced_core_object(
     kind: str,
     name: str,
@@ -392,6 +410,7 @@ async def patch_namespaced_core_object(
         )
     )
 
+@async_timer(app="PoolboyK8s")
 async def patch_custom_object(
     group: str,
     kind: str,
@@ -421,6 +440,7 @@ async def patch_custom_object(
             _content_type = 'application/json-patch+json',
         )
 
+@async_timer(app="PoolboyK8s")
 async def patch_object(
     api_version: str,
     kind: str,

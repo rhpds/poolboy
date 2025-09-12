@@ -98,4 +98,10 @@ tolerations: []
 affinity: {}
 
 clusterDomain: unknown
+
+# Enable Prometheus metrics
 enablePrometheusMetrics: true
+
+# Metrics Credentials
+metrics:
+  username: metrics

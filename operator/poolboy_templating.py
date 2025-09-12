@@ -1,15 +1,16 @@
 import copy
 import functools
-import jinja2
-import jmespath
 import json
-import pytimeparse
 import random
 import re
-
 from datetime import datetime, timedelta, timezone
-from strgen import StringGenerator
+
+import jinja2
+import jmespath
+import pytimeparse
+from metrics.timer_decorator import sync_timer
 from str2bool import str2bool
+from strgen import StringGenerator
 
 MAX_RECURSION_DEPTH = 100
 
@@ -183,6 +184,8 @@ def j2template_get(template: str):
     j2template_cache[template] = j2template
     return j2template
 
+
+@sync_timer(app="Jinja2Process")
 def jinja2process(template, omit=None, variables={}, template_variables={}):
     variables = copy.copy(variables)
     variables['datetime'] = datetime
