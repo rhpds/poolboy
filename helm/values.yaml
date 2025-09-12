@@ -75,7 +75,6 @@ service:
   ports:
   - name: metrics
     port: 9091
-    prometheus: 9091
     protocol: TCP
     targetPort: 9091
 
