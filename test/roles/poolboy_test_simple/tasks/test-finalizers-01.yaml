@@ -1,0 +1,158 @@
+---
+- name: Create ResourceProvider test-finalizers-01
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceProvider
+      metadata:
+        name: test-finalizers-01
+        namespace: "{{ poolboy_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        override:
+          apiVersion: "{{ poolboy_domain }}/v1"
+          kind: ResourceClaimTest
+          metadata:
+            name: test-finalizers-01-{% raw %}{{ guid }}{% endraw %}
+            namespace: "{{ poolboy_test_namespace }}"
+        parameters:
+        - name: stringvar
+          allowUpdate: true
+          required: true
+          validation:
+            openAPIV3Schema:
+              type: string
+              default: one
+              enum:
+              - one
+              - two
+              - three
+        template:
+          definition:
+            spec:
+              stringvalue: "{% raw %}{{ stringvar }}{% endraw %}"
+          enable: true
+        updateFilters:
+        - pathMatch: /spec/.*
+          allowedOps:
+          - replace
+
+- name: Create ResourceClaim test-finalizers-01-a
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceClaim
+      metadata:
+        name: test-finalizers-01-a
+        namespace: "{{ poolboy_test_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        provider:
+          name: test-finalizers-01
+          parameterValues:
+            stringvar: "one"
+
+- name: Verify handling of ResourceClaim test-finalizers-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-finalizers-01-a
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim
+  failed_when: >-
+    r_get_resource_claim.resources[0].status.resources[0].state is undefined
+  until: r_get_resource_claim is success
+  delay: 1
+  retries: 10
+
+- name: Save facts from for ResourceClaim test-finalizers-01-a
+  vars:
+    __name: >-
+      {{ r_get_resource_claim.resources[0].status.resourceHandle.name }}
+  set_fact:
+    resource_claim_test_finalizers_01_a_resource_handle_name: "{{ __name }}"
+    resource_claim_test_finalizers_01_a_resource_name: test-finalizers-01-{{ __name[5:] }}
+
+- name: Verify state of ResourceClaim test-finalizers-01-a
+  vars:
+    __state: "{{ r_get_resource_claim.resources[0] }}"
+  assert:
+    that:
+    - __state.status.resources[0].state.metadata.name == resource_claim_test_finalizers_01_a_resource_name
+    - __state.status.resources[0].state.spec.stringvalue == "one"
+
+- name: Verify creation of ResourceClaimTest test-finalizers-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaimTest
+    name: "{{ resource_claim_test_finalizers_01_a_resource_name }}"
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim_test
+  failed_when:  r_get_resource_claim_test.resources | length != 1
+  until: r_get_resource_claim_test is success
+  delay: 1
+  retries: 10
+
+- name: Verify finalizers on ResourceHandle for test-finalizers-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
+    namespace: "{{ poolboy_namespace }}"
+  register: r_get_resource_handle
+  failed_when: >-
+    r_get_resource_handle.resources | length != 1 or
+    r_get_resource_handle.resources[0].metadata.finalizers is undefined or
+    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler']
+
+- name: Set deprecated finalizer on ResourceHandle for test-finalizers-01-a
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
+    namespace: "{{ poolboy_namespace }}"
+    definition:
+      metadata:
+        finalizers: >-
+          {{ [poolboy_domain ~ '/handler-9'] }}
+
+- name: Pause 2 seconds
+  ansible.builtin.pause:
+    seconds: 2
+
+- name: Verify finalizers on ResourceHandle for test-finalizers-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
+    namespace: "{{ poolboy_namespace }}"
+  register: r_get_resource_handle
+  failed_when: >-
+    r_get_resource_handle.resources | length != 1 or
+    r_get_resource_handle.resources[0].metadata.finalizers is undefined or
+    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler-9']
+
+- name: Delete ResourceClaim test-finalizers-01-a
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-finalizers-01-a
+    namespace: "{{ poolboy_test_namespace }}"
+    state: absent
+
+- name: Verify deletion completes on ResourceHandle for test-finalizers-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
+    namespace: "{{ poolboy_namespace }}"
+  register: r_get_resource_handle
+  failed_when: >-
+    r_get_resource_handle.resources | length != 0
+...
