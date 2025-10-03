@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+import re
 from typing import Mapping
 
 import kopf
@@ -25,12 +26,16 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     # Never give up from network errors
     settings.networking.error_backoffs = InfiniteRelativeBackoff()
 
-    # Use operator domain as finalizer
+    # Set finalizer based on operator mode
     settings.persistence.finalizer = (
-        f"{Poolboy.operator_domain}/handler-{Poolboy.resource_handler_idx}" if Poolboy.operator_mode_resource_handler else
+        f"{Poolboy.operator_domain}/handler" if Poolboy.operator_mode_resource_handler else
         f"{Poolboy.operator_domain}/watch-{Poolboy.resource_watch_name}" if Poolboy.operator_mode_resource_watch else
         Poolboy.operator_domain
     )
+
+    # Support deprecated resource handler finalizer
+    if Poolboy.operator_mode_resource_handler:
+        settings.persistence.deprecated_finalizer = re.compile(re.escape(Poolboy.operator_domain) + '/handler-\d+$')
 
     # Store progress in status.
     settings.persistence.progress_storage = kopf.StatusProgressStorage(field='status.kopf.progress')
