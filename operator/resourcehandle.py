@@ -196,6 +196,14 @@ class ResourceHandle(KopfObject):
                     }
                 ]
 
+                # Update ResourceProvider to match ResourceClaim
+                if resource_claim.has_resource_provider:
+                    patch.append({
+                        "op": "add",
+                        "path": "/spec/provider",
+                        "value": resource_claim.spec['provider'],
+                    })
+
                 # Set resource names and add any additional resources to handle
                 for resource_index, claim_resource in enumerate(resource_claim_resources):
                     resource_name = resource_claim_resources[resource_index].get('name')
