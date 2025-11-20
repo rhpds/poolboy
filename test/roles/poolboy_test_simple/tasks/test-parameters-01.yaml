@@ -122,7 +122,7 @@
   assert:
     that:
     - __state.spec.provider.name == 'test-parameters-01'
-    - __state.spec.provider.parameterValues == {"numbervar": 1}
+    - '__state.spec.provider.parameterValues == {"numbervar": 1, "stringvar": "one"}'
 
 - name: Verify creation of ResourceClaimTest test-parameters-01-a
   kubernetes.core.k8s_info:

@@ -155,4 +155,7 @@
   register: r_get_resource_handle
   failed_when: >-
     r_get_resource_handle.resources | length != 0
+  until: r_get_resource_handle is successful
+  retries: 5
+  delay: 1
 ...
