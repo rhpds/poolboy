@@ -1,29 +1,32 @@
 import os
-from copy import deepcopy
-from uuid import UUID
 
 import kopf
 import kubernetes_asyncio
-import yaml
 
 
 class Poolboy():
     metrics_enabled = os.environ.get('METRICS_ENABLED', 'true').lower() == 'true'
-    metrics_port = int(os.environ.get('METRICS_PORT', 9091))
+    metrics_port = int(os.environ.get('METRICS_PORT', 9090))
     manage_claims_interval = int(os.environ.get('MANAGE_CLAIMS_INTERVAL', 60))
     manage_handles_interval = int(os.environ.get('MANAGE_HANDLES_INTERVAL', 60))
     manage_pools_interval = int(os.environ.get('MANAGE_POOLS_INTERVAL', 10))
-    operator_mode = os.environ.get('OPERATOR_MODE', 'all-in-one')
-    operator_mode_all_in_one = operator_mode == 'all-in-one'
-    operator_mode_manager = operator_mode == 'manager'
-    operator_mode_resource_handler = operator_mode == 'resource-handler'
-    operator_mode_resource_watch = operator_mode == 'resource-watch'
+
+    # Operator mode: 'standalone' or 'distributed'
+    # Backward compatibility:
+    #   - 'all-in-one' maps to 'standalone'
+    #   - 'manager', 'resource-handler', 'resource-watch' map to 'distributed'
+    _operator_mode_raw = os.environ.get('OPERATOR_MODE', 'distributed')
+    operator_mode = (
+        'standalone' if _operator_mode_raw == 'all-in-one'
+        else 'distributed' if _operator_mode_raw in ('manager', 'resource-handler', 'resource-watch')
+        else _operator_mode_raw
+    )
+    operator_mode_distributed = operator_mode == 'distributed'
+    operator_mode_standalone = operator_mode == 'standalone'
+
     operator_domain = os.environ.get('OPERATOR_DOMAIN', 'poolboy.gpte.redhat.com')
     operator_version = os.environ.get('OPERATOR_VERSION', 'v1')
     operator_api_version = f"{operator_domain}/{operator_version}"
-    resource_watch_name = os.environ.get('WATCH_NAME')
-    resource_handler_count = int(os.environ.get('RESOURCE_HANDLER_COUNT', 1))
-    resource_handler_idx = int(os.environ.get('RESOURCE_HANDLER_IDX', 0))
     resource_refresh_interval = int(os.environ.get('RESOURCE_REFRESH_INTERVAL', 600))
     resource_handle_deleted_annotation = f"{operator_domain}/resource-handle-deleted"
     resource_claim_name_annotation = f"{operator_domain}/resource-claim-name"
@@ -45,9 +48,28 @@ class Poolboy():
     resource_requester_user_annotation = f"{operator_domain}/resource-requester-user"
     resource_requester_preferred_username_annotation = f"{operator_domain}/resource-requester-preferred-username"
     ignore_label = f"{operator_domain}/ignore"
+    is_worker = os.environ.get('WORKER', 'false').lower() == 'true'
+
+    # TODO: Remove after all production clusters migrated (used for cleanup only)
     resource_handler_idx_label = f"{operator_domain}/resource-handler-idx"
-    resource_handler_resources = yaml.safe_load(os.environ['RESOURCE_HANDLER_RESOURCES']) if 'RESOURCE_HANDLER_RESOURCES' in os.environ else None
-    resource_watch_resources = yaml.safe_load(os.environ['RESOURCE_WATCH_RESOURCES']) if 'RESOURCE_WATCH_RESOURCES' in os.environ else None
+
+    # Worker feature flags (loaded from environment)
+    # When True, delegate processing to Celery workers
+    # When False, process synchronously in the main operator (current behavior)
+    workers_error_retry_countdown = int(os.environ.get('WORKERS_ERROR_RETRY_COUNTDOWN', '30'))
+    workers_lock_retry_countdown = int(os.environ.get('WORKERS_LOCK_RETRY_COUNTDOWN', '3'))
+    workers_resource_pool = os.environ.get('WORKERS_RESOURCE_POOL', 'false').lower() == 'true'
+    workers_resource_pool_daemon_mode = os.environ.get('WORKERS_RESOURCE_POOL_DAEMON_MODE', 'scheduler')
+    workers_resource_handle = os.environ.get('WORKERS_RESOURCE_HANDLE', 'false').lower() == 'true'
+    workers_resource_handle_daemon_mode = os.environ.get('WORKERS_RESOURCE_HANDLE_DAEMON_MODE', 'scheduler')
+    workers_resource_claim = os.environ.get('WORKERS_RESOURCE_CLAIM', 'false').lower() == 'true'
+    workers_resource_claim_daemon_mode = os.environ.get('WORKERS_RESOURCE_CLAIM_DAEMON_MODE', 'scheduler')
+    workers_resource_provider = os.environ.get('WORKERS_RESOURCE_PROVIDER', 'false').lower() == 'true'
+    workers_resource_watch = os.environ.get('WORKERS_RESOURCE_WATCH', 'false').lower() == 'true'
+    workers_cleanup = os.environ.get('WORKERS_CLEANUP', 'false').lower() == 'true'
+
+    # Redis URL for distributed locking (used by main operator to send tasks)
+    redis_url = os.environ.get('REDIS_URL')
 
     @classmethod
     async def on_cleanup(cls):
@@ -55,6 +77,11 @@ class Poolboy():
 
     @classmethod
     async def on_startup(cls, logger: kopf.ObjectLogger):
+        # Log operator mode on startup
+        logger.info(f"Poolboy starting in {cls.operator_mode} mode")
+        if cls.operator_mode_distributed:
+            logger.info("Distributed mode: delegating to Celery workers")
+
         if os.path.exists('/run/secrets/kubernetes.io/serviceaccount'):
             kubernetes_asyncio.config.load_incluster_config()
             with open('/run/secrets/kubernetes.io/serviceaccount/namespace', encoding='utf-8') as f:
@@ -74,83 +101,15 @@ class Poolboy():
         cls.core_v1_api = kubernetes_asyncio.client.CoreV1Api(cls.api_client)
         cls.custom_objects_api = kubernetes_asyncio.client.CustomObjectsApi(cls.api_client)
 
-        if cls.operator_mode == 'manager':
-            await cls.assign_resource_handlers(logger=logger)
-            await cls.start_resource_handlers(logger=logger)
-        elif cls.operator_mode == 'all-in-one':
-            await cls.clear_resource_handler_assignments(logger=logger)
+        # Always run migration cleanup on startup
+        # TODO: Remove after all production clusters migrated
+        await cls.clear_resource_handler_assignments(logger=logger)
 
-    @classmethod
-    async def assign_resource_handlers(cls, logger: kopf.ObjectLogger):
-        """Label ResourceHandles and ResourcePools to match to appropriate handlers.
-        Clear any extraneous finalizers."""
-        for plural in ('resourcehandles', 'resourcepools'):
-            _continue = None
-            while True:
-                obj_list = await Poolboy.custom_objects_api.list_namespaced_custom_object(
-                    group=Poolboy.operator_domain,
-                    namespace=Poolboy.namespace,
-                    plural=plural,
-                    version=Poolboy.operator_version,
-                    _continue = _continue,
-                    limit = 50,
-                )
-                for item in obj_list.get('items', []):
-                    kind = item['kind']
-                    name = item['metadata']['name']
-                    patch = []
-                    resource_handler_idx = int(UUID(item['metadata']['uid'])) % cls.resource_handler_count
-                    if resource_handler_idx != int(item['metadata'].get('labels', {}).get(cls.resource_handler_idx_label, '-1')):
-                        if 'labels' in item['metadata']:
-                            patch.append({
-                                "op": "add",
-                                "path": "/metadata/labels",
-                                "value": {
-                                    cls.resource_handler_idx_label: str(resource_handler_idx)
-                                }
-                            })
-                        else:
-                            patch.append({
-                                "op": "add",
-                                "path": f"/metadata/labels/{cls.resource_handler_idx_label.replace('/', '~1')}",
-                                "value": str(resource_handler_idx),
-                            })
-                    if 'finalizers' in item['metadata']:
-                        clean_finalizers = [
-                            entry for entry in item['metadata']['finalizers']
-                            if entry == f"{Poolboy.operator_domain}/resource-handler-{resource_handler_idx}"
-                            or not entry.startswith(f"{Poolboy.operator_domain}/resource-handler-")
-                        ]
-                        if clean_finalizers != item['metadata']['finalizers']:
-                            patch.append({
-                                "op": "replace",
-                                "path": "/metadata/finalizers",
-                                "value": clean_finalizers,
-                            })
-                    if patch:
-                        logger.info(
-                            f"Patching {kind} {name} to assign resource handler"
-                        )
-                        try:
-                            await Poolboy.custom_objects_api.patch_namespaced_custom_object(
-                                group=Poolboy.operator_domain,
-                                name=item['metadata']['name'],
-                                namespace=Poolboy.namespace,
-                                plural=plural,
-                                version=Poolboy.operator_version,
-                                body=patch,
-                                _content_type = 'application/json-patch+json',
-                            )
-                        except:
-                            logger.exception("Patch failed.")
-
-                _continue = obj_list['metadata'].get('continue')
-                if not _continue:
-                    break
-
+    # TODO: Remove after all production clusters migrated
     @classmethod
     async def clear_resource_handler_assignments(cls, logger: kopf.ObjectLogger):
-        """Remove labels and finalizers applied to run in manager mode."""
+        """Remove labels and finalizers from legacy manager mode. Keep for migration."""
+        handler_finalizer = f"{cls.operator_domain}/handler"
         for plural in ('resourcehandles', 'resourcepools'):
             _continue = None
             while True:
@@ -172,9 +131,11 @@ class Poolboy():
                             "path": f"/metadata/labels/{cls.resource_handler_idx_label.replace('/', '~1')}",
                         })
                     if 'finalizers' in item['metadata']:
+                        # Clean both /resource-handler-* AND /handler patterns
                         clean_finalizers = [
                             entry for entry in item['metadata']['finalizers']
                             if not entry.startswith(f"{Poolboy.operator_domain}/resource-handler-")
+                            and not entry.startswith(handler_finalizer)  # covers /handler and /handler-N
                         ]
                         if clean_finalizers != item['metadata']['finalizers']:
                             patch.append({
@@ -202,81 +163,3 @@ class Poolboy():
                 _continue = obj_list['metadata'].get('continue')
                 if not _continue:
                     break
-
-    @classmethod
-    async def start_resource_handlers(cls, logger: kopf.ObjectLogger):
-        cls.manager_pod = await cls.core_v1_api.read_namespaced_pod(
-            name=os.environ['HOSTNAME'],
-            namespace=cls.namespace,
-        )
-        logger.info(f"Manager running in pod {cls.manager_pod.metadata.name}")
-        for idx in range(Poolboy.resource_handler_count):
-            replicaset = kubernetes_asyncio.client.V1ReplicaSet(
-                api_version="apps/v1",
-                kind="ReplicaSet",
-                metadata=kubernetes_asyncio.client.V1ObjectMeta(
-                    name=f"{cls.manager_pod.metadata.name}-handler-{idx}",
-                    namespace=cls.namespace,
-                    owner_references=[
-                        kubernetes_asyncio.client.V1OwnerReference(
-                            api_version=cls.manager_pod.api_version,
-                            controller=True,
-                            kind=cls.manager_pod.kind,
-                            name=cls.manager_pod.metadata.name,
-                            uid=cls.manager_pod.metadata.uid,
-                        )
-                    ]
-                ),
-            )
-            replicaset.spec = kubernetes_asyncio.client.V1ReplicaSetSpec(
-                replicas=1,
-                selector=kubernetes_asyncio.client.V1LabelSelector(
-                    match_labels={
-                        "app.kubernetes.io/name": cls.manager_pod.metadata.name,
-                        "app.kubernetes.io/instance": f"handler-{idx}",
-                    },
-                ),
-                template=kubernetes_asyncio.client.V1PodTemplateSpec(
-                    metadata=kubernetes_asyncio.client.V1ObjectMeta(
-                        labels={
-                            "app.kubernetes.io/name": cls.manager_pod.metadata.name,
-                            "app.kubernetes.io/instance": f"handler-{idx}",
-                        },
-                    ),
-                    spec=deepcopy(cls.manager_pod.spec),
-                ),
-            )
-
-            replicaset.spec.template.spec.containers[0].env = [
-                env_var
-                for env_var in cls.manager_pod.spec.containers[0].env
-                if env_var.name not in {
-                    'OPERATOR_MODE',
-                    'RESOURCE_HANDLER_RESOURCES',
-                    'RESOURCE_WATCH_RESOURCES',
-                }
-            ]
-            replicaset.spec.template.spec.containers[0].env.append(
-                kubernetes_asyncio.client.V1EnvVar(
-                    name='OPERATOR_MODE',
-                    value='resource-handler',
-                )
-            )
-            replicaset.spec.template.spec.containers[0].env.append(
-                kubernetes_asyncio.client.V1EnvVar(
-                    name='RESOURCE_HANDLER_IDX',
-                    value=str(idx),
-                )
-            )
-            replicaset.spec.template.spec.node_name = None
-            if cls.resource_handler_resources:
-                replicaset.spec.template.spec.containers[0].resources = kubernetes_asyncio.client.V1ResourceRequirements(
-                    limits=cls.resource_handler_resources.get('limits'),
-                    requests=cls.resource_handler_resources.get('requests'),
-                )
-
-            replicaset = await cls.apps_v1_api.create_namespaced_replica_set(
-                namespace=cls.namespace,
-                body=replicaset,
-            )
-            logger.info(f"Created ReplicaSet {replicaset.metadata.name}")

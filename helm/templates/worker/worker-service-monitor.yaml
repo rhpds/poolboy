@@ -1,0 +1,31 @@
+{{- /* Worker ServiceMonitor - auto-enabled when operatorMode is 'distributed' */ -}}
+{{- if and (or .Values.worker.enabled (eq .Values.operatorMode "distributed")) .Values.worker.metrics.enabled .Values.enablePrometheusMetrics }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "poolboy.name" . }}-worker-metrics
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  selector:
+    matchLabels:
+      {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  namespaceSelector:
+    matchNames:
+      - {{ include "poolboy.namespaceName" . }}
+  endpoints:
+    - port: worker-metrics
+      interval: "30s"
+      path: {{ .Values.worker.metrics.path | default "/metrics" }}
+      basicAuth:
+        username:
+          name: {{ include "poolboy.name" . }}-metrics-credentials
+          key: metrics_username
+        password:
+          name: {{ include "poolboy.name" . }}-metrics-credentials
+          key: metrics_password
+{{- end }}
+

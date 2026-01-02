@@ -1,0 +1,21 @@
+{{- if .Values.flower.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "poolboy.name" . }}-flower
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+spec:
+  type: ClusterIP
+  ports:
+    - name: flower
+      port: {{ .Values.flower.port | default 5555 }}
+      protocol: TCP
+      targetPort: flower
+  selector:
+    {{- include "poolboy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+{{- end }}
+

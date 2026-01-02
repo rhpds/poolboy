@@ -1,0 +1,21 @@
+{{- if and .Values.flower.enabled .Values.flower.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "poolboy.name" . }}-flower
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+spec:
+  to:
+    kind: Service
+    name: {{ include "poolboy.name" . }}-flower
+    weight: 100
+  port:
+    targetPort: flower
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+{{- end }}

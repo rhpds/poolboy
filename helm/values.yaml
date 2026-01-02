@@ -20,27 +20,14 @@ operatorDomain:
   # If not set and create is true, a name is generated using the operatorDomain template
   name:
 
-operatorMode: manager
+# Operator mode: 'standalone' (single operator) or 'distributed' (with Celery workers)
+# Backward compatibility: 'all-in-one' maps to 'standalone', 'manager' maps to 'distributed'
+operatorMode: distributed
 
 manageClaimsInterval: 60
 manageHandlesInterval: 60
 managePoolsInterval: 10
 resourceRefreshInterval: 600
-resourceHandlerCount: 1
-resourceHandlerResources:
-  limits:
-    cpu: 1000m
-    memory: 256Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
-resourceWatchResources:
-  limits:
-    cpu: 1000m
-    memory: 256Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
 
 anarchy:
   # Control whether anarchy integration should be created
@@ -74,9 +61,9 @@ service:
   type: ClusterIP
   ports:
   - name: metrics
-    port: 9091
+    port: 9090
     protocol: TCP
-    targetPort: 9091
+    targetPort: 9090
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -104,3 +91,207 @@ enablePrometheusMetrics: true
 # Metrics Credentials
 metrics:
   username: metrics
+
+# ===========================================
+# Worker Feature Flags
+# Enable/disable async processing per resource type
+# ===========================================
+useWorkers:
+  # Retry delay (seconds) when a task cannot acquire the distributed lock.
+  # Lower values = faster retry but more Redis load.
+  # Higher values = slower retry but less Redis load.
+  lockRetryCountdown: 3
+
+  # Retry delay (seconds) when a task fails due to a real error (not lock contention).
+  # Tasks will retry up to 5 times with this delay between attempts.
+  # After 5 retries, the task fails permanently.
+  errorRetryCountdown: 30
+
+  resourcePool:
+    enabled: false
+    # Operation mode for periodic tasks: daemon, scheduler, or both
+    daemonMode: "scheduler"
+    partitions: 2
+  resourceHandle:
+    enabled: false
+    # Operation mode for periodic tasks: daemon, scheduler, or both
+    daemonMode: "scheduler"
+    partitions: 4
+  resourceClaim:
+    enabled: false
+    # Operation mode for periodic tasks: daemon, scheduler, or both
+    daemonMode: "scheduler"
+    partitions: 4
+  resourceProvider:
+    enabled: false
+    partitions: 2
+  resourceWatch:
+    enabled: false
+    partitions: 2
+  cleanup:
+    enabled: false
+    partitions: 4
+
+# ===========================================
+# Redis Configuration
+# ===========================================
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 4Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "400m"
+
+# ===========================================
+# Worker Configuration
+# ===========================================
+worker:
+  enabled: false
+  replicas: 2
+
+  # Prometheus metrics endpoint
+  metrics:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDownStabilizationWindowSeconds: 300
+
+  extraEnvVars: {}
+  extraEnvFrom: []
+
+  # Command-line args for celery worker
+  args:
+    loglevel: info
+    concurrency: 4
+    pool: prefork
+    maxTasksPerChild: 100
+
+  # Celery configuration (CELERY_ prefix added automatically)
+  # Keys are snake_case matching Celery config names
+  config:
+    result_expires: 3600
+    result_extended: true
+    task_ack_late: true
+    task_default_retry_delay: 60
+    task_default_retry_delay_max: 600
+    task_reject_on_worker_lost: true
+    task_soft_time_limit: 1740
+    task_time_limit: 1800
+    worker_prefetch_multiplier: 1
+    worker_send_task_events: true
+    task_send_sent_event: true
+
+# ===========================================
+# Scheduler Configuration (Celery Beat)
+# ===========================================
+scheduler:
+  enabled: false
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  extraEnvVars: {}
+  extraEnvFrom: []
+  config:
+    logging:
+      level: INFO
+
+# ===========================================
+# Celery Flower Configuration
+# ===========================================
+flower:
+  enabled: false
+  replicas: 1
+
+  image:
+    repository: mher/flower
+    tag: "2.0"
+    pullPolicy: IfNotPresent
+
+  # Web UI port
+  port: 5555
+
+  # Basic authentication
+  auth:
+    enabled: true
+    username: admin
+
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  # Flower behavior settings
+  config:
+    # Maximum number of tasks to keep in memory
+    maxTasks: 10000
+    # Remove offline workers after N seconds (0 = keep forever)
+    purgeOfflineWorkers: 0
+
+  # Persistent storage for task history
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""
+
+  # Additional environment variables
+  extraEnvVars: {}
+  extraEnvFrom: []
+
+  # OpenShift Route for external access
+  route:
+    enabled: false
+
+# ===========================================
+# Task Schedules
+# Supports: seconds (interval) or cron (expression)
+# ===========================================
+schedules:
+  maintain-all-pools:
+    enabled: false
+    schedule:
+      seconds: 30
+  maintain-all-handles:
+    enabled: false
+    schedule:
+      seconds: 60
+  maintain-all-claims:
+    enabled: false
+    schedule:
+      seconds: 60
+  cleanup-stale-handles:
+    enabled: false
+    schedule:
+      cron: "0 * * * *"

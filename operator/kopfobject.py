@@ -1,9 +1,10 @@
 import asyncio
 from datetime import datetime
-from typing import List, Mapping
+from typing import List, Mapping, Optional, Self
 
 import kopf
 import kubernetes_asyncio
+from cache import Cache, CacheTag
 from metrics.timer_decorator import TimerDecoratorMeta
 from poolboy import Poolboy
 
@@ -49,6 +50,30 @@ class KopfObject(metaclass=TimerDecoratorMeta):
     def api_group_version(self):
         return f"{self.api_group}/{self.api_version}"
 
+    @classmethod
+    def cache_delete(cls, tag: CacheTag, key: str) -> None:
+        """Delete object from cache."""
+        Cache.delete(tag, key)
+
+    @classmethod
+    def cache_get(cls, tag: CacheTag, key: str) -> Optional[Self]:
+        """
+        Get object from cache, reconstructing if needed.
+
+        MemoryBackend returns the Python object directly.
+        RedisBackend returns a dict that needs reconstruction via from_definition().
+        """
+        cached = Cache.get(tag, key)
+        if cached is None:
+            return None
+        if isinstance(cached, cls):
+            return cached
+        return cls.from_definition(cached)
+
+    def cache_set(self, tag: CacheTag, key: str, ttl: int = 300) -> None:
+        """Store object in cache with TTL in seconds."""
+        Cache.set(tag, key, self, ttl)
+
     @property
     def creation_datetime(self):
         return datetime.strptime(self.creation_timestamp, "%Y-%m-%dT%H:%H:%S%z")
@@ -56,6 +81,16 @@ class KopfObject(metaclass=TimerDecoratorMeta):
     @property
     def creation_timestamp(self) -> str:
         return self.meta['creationTimestamp']
+
+    @property
+    def definition(self) -> Mapping:
+        return {
+            'apiVersion': self.api_group_version,
+            'kind': self.kind,
+            'metadata': dict(self.meta),
+            'spec': dict(self.spec) if self.spec else {},
+            'status': dict(self.status) if self.status else {},
+        }
 
     @property
     def deletion_timestamp(self) -> str|None:
@@ -73,6 +108,10 @@ class KopfObject(metaclass=TimerDecoratorMeta):
             "name": self.name,
             "namespace": self.namespace,
         }
+
+    @property
+    def resource_version(self) -> str:
+        return self.meta.get('resourceVersion', '')
 
     def refresh(self,
         annotations: kopf.Annotations,

@@ -6,6 +6,7 @@ metadata:
   namespace: {{ include "poolboy.namespaceName" . }}
   labels:
     {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
 spec:
   type: {{ .Values.service.type }}
   {{- with .Values.service.ports }}
@@ -14,5 +15,6 @@ spec:
   {{- end }}
   selector:
     {{- include "poolboy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
   sessionAffinity: None
 {{- end -}}

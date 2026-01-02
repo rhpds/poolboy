@@ -1,15 +1,13 @@
 import asyncio
-
 from datetime import timedelta
 from typing import List, Mapping, TypeVar
-from uuid import UUID
 
 import kopf
+import kubernetes_asyncio
 import pytimeparse
-
 import resourcehandle
 import resourceprovider
-
+from cache import Cache, CacheTag
 from kopfobject import KopfObject
 from poolboy import Poolboy
 
@@ -23,13 +21,12 @@ class ResourcePool(KopfObject):
     kind = "ResourcePool"
     plural = "resourcepools"
 
-    instances = {}
     class_lock = asyncio.Lock()
 
     @classmethod
     async def get(cls, name: str) -> ResourcePoolT:
         async with cls.class_lock:
-            return cls.instances.get(name)
+            return cls.cache_get(CacheTag.POOL, name)
 
     @classmethod
     async def register(
@@ -44,7 +41,7 @@ class ResourcePool(KopfObject):
         uid: str,
     ) -> ResourcePoolT:
         async with cls.class_lock:
-            resource_pool = cls.instances.get(name)
+            resource_pool = cls.cache_get(CacheTag.POOL, name)
             if resource_pool:
                 resource_pool.refresh(
                     annotations = annotations,
@@ -65,13 +62,16 @@ class ResourcePool(KopfObject):
                     status = status,
                     uid = uid,
                 )
-            resource_pool.__register()
+            resource_pool.cache_set(CacheTag.POOL, name, ttl=300)
             return resource_pool
 
     @classmethod
     async def unregister(cls, name: str) -> ResourcePoolT|None:
         async with cls.class_lock:
-            return cls.instances.pop(name, None)
+            resource_pool = cls.cache_get(CacheTag.POOL, name)
+            if resource_pool:
+                Cache.delete(CacheTag.POOL, name)
+            return resource_pool
 
     @property
     def delete_unhealthy_resource_handles(self) -> bool:
@@ -128,11 +128,6 @@ class ResourcePool(KopfObject):
         return self.spec.get('minAvailable', 0)
 
     @property
-    def resource_handler_idx(self) -> int:
-        """Label value used to select which resource handler pod should manage this ResourcePool."""
-        return int(UUID(self.uid)) % Poolboy.resource_handler_count
-
-    @property
     def resource_provider_name(self) -> str|None:
         return self.spec.get('provider', {}).get('name')
 
@@ -145,38 +140,10 @@ class ResourcePool(KopfObject):
         return self.spec.get('vars', {})
 
     def __register(self) -> None:
-        self.instances[self.name] = self
+        self.cache_set(CacheTag.POOL, self.name, ttl=300)
 
     def __unregister(self) -> None:
-        self.instances.pop(self.name, None)
-
-    async def assign_resource_handler(self):
-        """Apply label to indicate resource handler should manage this ResourcePool.
-        Do not change label on items which are deleting."""
-        if (
-            self.deletion_timestamp is None and
-            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
-        ):
-            try:
-                patch = [{
-                    "op": "test",
-                    "path": "/metadata/deletionTimestamp",
-                    "value": None,
-                }]
-                patch.append({
-                    "op": "add",
-                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
-                    "value": str(self.resource_handler_idx),
-                } if self.labels else {
-                    "op": "add",
-                    "path": f"/metadata/labels",
-                    "value": {
-                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
-                    }
-                })
-                await self.json_patch(patch)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
-                pass
+        Cache.delete(CacheTag.POOL, self.name)
 
     async def get_resource_provider(self) -> ResourceProviderT:
         """Return ResourceProvider configured to manage ResourceHandle."""
@@ -214,14 +181,14 @@ class ResourcePool(KopfObject):
                     resource_handle_deficit = self.max_unready - unready_count
 
             if resource_handle_deficit > 0:
-                for i in range(resource_handle_deficit):
-                    resource_handle = await resourcehandle.ResourceHandle.create_for_pool(
-                        logger=logger,
-                        resource_pool=self
-                    )
-                    resource_handles_for_status.append({
-                        "name": resource_handle.name,
-                    })
+                    for i in range(resource_handle_deficit):
+                        resource_handle = await resourcehandle.ResourceHandle.create_for_pool(
+                            logger=logger,
+                            resource_pool=self
+                        )
+                        resource_handles_for_status.append({
+                            "name": resource_handle.name,
+                        })
 
             patch = []
             if not self.status:
@@ -251,3 +218,21 @@ class ResourcePool(KopfObject):
 
             if patch:
                 await self.json_patch_status(patch)
+
+    async def refetch(self) -> ResourcePoolT | None:
+        """Fetch updated object from K8s API."""
+        try:
+            definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
+                Poolboy.operator_domain,
+                Poolboy.operator_version,
+                Poolboy.namespace,
+                'resourcepools',
+                self.name,
+            )
+            self.refresh_from_definition(definition)
+            return self
+        except kubernetes_asyncio.client.exceptions.ApiException as e:
+            if e.status == 404:
+                await self.unregister(name=self.name)
+                return None
+            raise

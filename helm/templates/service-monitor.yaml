@@ -10,6 +10,7 @@ spec:
   selector:
     matchLabels:
       {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: operator
   namespaceSelector:
     matchNames:
     - {{ include "poolboy.namespaceName" . }}

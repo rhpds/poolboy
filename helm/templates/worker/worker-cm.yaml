@@ -1,0 +1,37 @@
+{{- /* Worker ConfigMap - auto-enabled when operatorMode is 'distributed' */ -}}
+{{- if or .Values.worker.enabled (eq .Values.operatorMode "distributed") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "poolboy.name" . }}-worker-cm
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker-cm
+data:
+  # Redis URL (base URL, components append DB number: /0, /1, /2, /3)
+  REDIS_URL: {{ printf "redis://%s-redis:6379" (include "poolboy.name" .) | quote }}
+  CELERY_BROKER_URL: {{ printf "redis://%s-redis:6379/0" (include "poolboy.name" .) | quote }}
+  CELERY_RESULT_BACKEND: {{ printf "redis://%s-redis:6379/1" (include "poolboy.name" .) | quote }}
+  # Celery configuration (from worker.config)
+  {{- range $key, $value := .Values.worker.config }}
+  CELERY_{{ $key | upper }}: {{ $value | quote }}
+  {{- end }}
+  # Partition configuration (from useWorkers)
+  {{- range $name, $config := .Values.useWorkers }}
+  {{- if and (kindIs "map" $config) $config.enabled $config.partitions }}
+  PARTITION_{{ $name | snakecase | upper }}: {{ $config.partitions | quote }}
+  {{- end }}
+  {{- end }}
+  # Operator configuration
+  WORKER: "true"
+  CLUSTER_DOMAIN: {{ .Values.clusterDomain | quote }}
+  OPERATOR_DOMAIN: {{ include "poolboy.operatorDomain" . | quote }}
+  RESOURCE_REFRESH_INTERVAL: {{ .Values.resourceRefreshInterval | quote }}
+  # Metrics configuration
+  {{- if .Values.worker.metrics.enabled }}
+  PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus_metrics"
+  WORKER_METRICS_ENABLED: "true"
+  WORKER_METRICS_PORT: {{ .Values.worker.metrics.port | default 9090 | quote }}
+  {{- end }}
+{{- end }}

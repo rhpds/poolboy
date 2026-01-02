@@ -1,0 +1,101 @@
+{{- if .Values.flower.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "poolboy.name" . }}-flower
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: {{ .Values.flower.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: flower
+  template:
+    metadata:
+      labels:
+        {{- include "poolboy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: flower
+    spec:
+      containers:
+        - name: flower
+          image: "{{ .Values.flower.image.repository }}:{{ .Values.flower.image.tag }}"
+          imagePullPolicy: {{ .Values.flower.image.pullPolicy | default "IfNotPresent" }}
+          command: ["celery"]
+          args:
+            - "--broker={{ printf "redis://%s-redis:6379/0" (include "poolboy.name" .) }}"
+            - "--result-backend={{ printf "redis://%s-redis:6379/1" (include "poolboy.name" .) }}"
+            - "flower"
+            - "--port={{ .Values.flower.port | default 5555 }}"
+            {{- if .Values.flower.auth.enabled }}
+            - "--basic-auth=$(FLOWER_USERNAME):$(FLOWER_PASSWORD)"
+            {{- end }}
+            {{- if .Values.flower.config.maxTasks }}
+            - "--max-tasks={{ .Values.flower.config.maxTasks }}"
+            {{- end }}
+            {{- if .Values.flower.config.purgeOfflineWorkers }}
+            - "--purge_offline_workers={{ .Values.flower.config.purgeOfflineWorkers }}"
+            {{- end }}
+            {{- if .Values.flower.persistence.enabled }}
+            - "--persistent=true"
+            - "--db=/data/flower.db"
+            {{- end }}
+          ports:
+            - name: flower
+              containerPort: {{ .Values.flower.port | default 5555 }}
+          envFrom:
+            {{- with .Values.flower.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- range $key, $value := .Values.flower.extraEnvVars }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.flower.auth.enabled }}
+            - name: FLOWER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "poolboy.name" . }}-flower-credentials
+                  key: username
+            - name: FLOWER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "poolboy.name" . }}-flower-credentials
+                  key: password
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: flower
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: flower
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+          volumeMounts:
+            - name: flower-data
+              mountPath: /data
+      volumes:
+        - name: flower-data
+          {{- if .Values.flower.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "poolboy.name" . }}-flower-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "poolboy.serviceAccountName" . }}
+{{- end }}

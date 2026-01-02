@@ -6,17 +6,20 @@ metadata:
   namespace: {{ include "poolboy.namespaceName" . }}
   labels:
     {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: operator
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
         {{- include "poolboy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: operator
     spec:
       containers:
         - name: manager
@@ -33,24 +36,17 @@ spec:
             value: {{ include "poolboy.operatorDomain" . }}
           - name: OPERATOR_MODE
             value: "{{ .Values.operatorMode }}"
-          {{- if eq .Values.operatorMode "manager" }}
-          - name: RESOURCE_HANDLER_COUNT
-            value: "{{ .Values.resourceHandlerCount }}"
-          {{- if .Values.resourceHandlerResources }}
-          - name: RESOURCE_HANDLER_RESOURCES
-            value: {{ .Values.resourceHandlerResources | toJson | quote }}
-          {{- end }}
-          {{- if .Values.resourceWatchResources }}
-          - name: RESOURCE_WATCH_RESOURCES
-            value: {{ .Values.resourceWatchResources | toJson | quote }}
-          {{- end }}
-          {{- end }}
           {{- if .Values.enablePrometheusMetrics}}
           - name: METRICS_ENABLED
             value: "true"
           {{- end }}
           - name: RESOURCE_REFRESH_INTERVAL
             value: "{{ .Values.resourceRefreshInterval }}"
+          {{- if .Values.worker.enabled }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "poolboy.name" . }}-useworkers-cm
+          {{- end }}
           image: "{{ include "poolboy.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
@@ -64,7 +60,7 @@ spec:
           - name: kopf
             containerPort: 8080
           - name: metrics
-            containerPort: 9091
+            containerPort: 9090
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

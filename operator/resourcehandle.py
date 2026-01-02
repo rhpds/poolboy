@@ -1,23 +1,19 @@
 import asyncio
-import logging
-
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Mapping, TypeVar
-from uuid import UUID
 
 import jinja2
 import jsonpointer
 import kopf
 import kubernetes_asyncio
-import pytimeparse
-
 import poolboy_k8s
+import pytimeparse
 import resourceclaim
 import resourcepool
 import resourceprovider
 import resourcewatch
-
+from cache import Cache, CacheTag
 from kopfobject import KopfObject
 from poolboy import Poolboy
 from poolboy_templating import recursive_process_template_strings, timedelta_to_str
@@ -66,7 +62,7 @@ class ResourceHandleMatch:
         # Prefer unknown readiness state to known unready state
         if self.resource_handle.is_ready is None and cmp.resource_handle.is_ready is False:
             return True
-        if not self.resource_handle.is_ready is False and cmp.resource_handle.is_ready is None:
+        if self.resource_handle.is_ready is not False and cmp.resource_handle.is_ready is None:
             return False
 
         # Prefer older matches
@@ -78,16 +74,12 @@ class ResourceHandle(KopfObject):
     kind = "ResourceHandle"
     plural = "resourcehandles"
 
-    all_instances = {}
-    bound_instances = {}
-    unbound_instances = {}
     class_lock = asyncio.Lock()
-    watch_other_task = None
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceHandleT:
         name = definition['metadata']['name']
-        resource_handle = cls.all_instances.get(name)
+        resource_handle = cls.cache_get(CacheTag.HANDLE, name)
         if resource_handle:
             resource_handle.refresh_from_definition(definition=definition)
         else:
@@ -113,7 +105,8 @@ class ResourceHandle(KopfObject):
     ) -> ResourceHandleT|None:
         async with cls.class_lock:
             # Check if there is already an assigned claim
-            resource_handle = cls.bound_instances.get((resource_claim.namespace, resource_claim.name))
+            bound_key = f"{resource_claim.namespace}/{resource_claim.name}"
+            resource_handle = cls.cache_get(CacheTag.HANDLE_BOUND, bound_key)
             if resource_handle:
                 if await resource_handle.refetch():
                     logger.warning(f"Rebinding {resource_handle} to {resource_claim}")
@@ -124,7 +117,10 @@ class ResourceHandle(KopfObject):
 
             # Loop through unbound instances to find best match
             matches = []
-            for resource_handle in cls.unbound_instances.values():
+            for name in Cache.get_keys_by_tag(CacheTag.HANDLE_UNBOUND):
+                resource_handle = cls.cache_get(CacheTag.HANDLE_UNBOUND, name)
+                if not resource_handle:
+                    continue
                 # Skip unhealthy
                 if resource_handle.is_healthy is False:
                     continue
@@ -391,12 +387,8 @@ class ResourceHandle(KopfObject):
             version = Poolboy.operator_version,
         )
         resource_handle = cls.from_definition(definition)
-        if (
-            Poolboy.operator_mode_all_in_one or (
-                Poolboy.operator_mode_resource_handler and
-                Poolboy.resource_handler_idx == resource_handle.resource_handler_idx
-            )
-        ):
+        # Register in standalone mode (no handler partitioning)
+        if Poolboy.operator_mode_standalone:
             resource_handle.__register()
         logger.info(
             f"Created ResourceHandle {resource_handle.name} for "
@@ -465,12 +457,8 @@ class ResourceHandle(KopfObject):
             version = Poolboy.operator_version,
         )
         resource_handle = cls.from_definition(definition)
-        if (
-            Poolboy.operator_mode_all_in_one or (
-                Poolboy.operator_mode_resource_handler and
-                Poolboy.resource_handler_idx == resource_handle.resource_handler_idx
-            )
-        ):
+        # Register in standalone mode (no handler partitioning)
+        if Poolboy.operator_mode_standalone:
             resource_handle.__register()
         logger.info(f"Created ResourceHandle {resource_handle.name} for ResourcePool {resource_pool.name}")
         return resource_handle
@@ -481,7 +469,9 @@ class ResourceHandle(KopfObject):
         logger: kopf.ObjectLogger,
         resource_pool: ResourcePoolT,
     ) -> List[ResourceHandleT]:
-        if Poolboy.operator_mode_all_in_one:
+        # Workers always fetch from API (no shared memory cache)
+        use_cache = Poolboy.operator_mode_standalone
+        if use_cache:
             async with cls.class_lock:
                 resource_handles = []
                 for resource_handle in list(cls.unbound_instances.values()):
@@ -510,8 +500,10 @@ class ResourceHandle(KopfObject):
     @classmethod
     async def get(cls, name: str, ignore_deleting=True, use_cache=True) -> ResourceHandleT|None:
         async with cls.class_lock:
-            if use_cache and name in cls.all_instances:
-                return cls.all_instances[name]
+            if use_cache:
+                cached = cls.cache_get(CacheTag.HANDLE, name)
+                if cached:
+                    return cached
 
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
                 group=Poolboy.operator_domain,
@@ -528,12 +520,7 @@ class ResourceHandle(KopfObject):
 
     @classmethod
     def get_from_cache(cls, name: str) -> ResourceHandleT|None:
-        return cls.all_instances.get(name)
-
-    @classmethod
-    def start_watch_other(cls) -> None:
-        logger = logging.getLogger('watch_other_handles')
-        cls.watch_other_task = asyncio.create_task(cls.watch_other(logger))
+        return cls.cache_get(CacheTag.HANDLE, name)
 
     @classmethod
     async def get_unbound_handles_for_pool(
@@ -541,15 +528,23 @@ class ResourceHandle(KopfObject):
         resource_pool: ResourcePoolT,
         logger: kopf.ObjectLogger,
     ) -> List[ResourceHandleT]:
+        """Get unbound handles for a pool."""
         resource_handles = []
-        if Poolboy.operator_mode_all_in_one:
+
+        # In standalone mode, use cache (Memory or Redis)
+        # In distributed mode, fetch from K8s API to ensure completeness
+        # (cache may not be fully populated if operator just started)
+        if Poolboy.operator_mode_standalone:
             async with cls.class_lock:
-                for resource_handle in ResourceHandle.unbound_instances.values():
-                    if resource_handle.resource_pool_name == resource_pool.name \
+                for name in Cache.get_keys_by_tag(CacheTag.HANDLE_UNBOUND):
+                    resource_handle = cls.cache_get(CacheTag.HANDLE_UNBOUND, name)
+                    if resource_handle \
+                    and resource_handle.resource_pool_name == resource_pool.name \
                     and resource_handle.resource_pool_namespace == resource_pool.namespace:
                         resource_handles.append(resource_handle)
-                return resource_handles
+            return resource_handles
 
+        # Distributed mode: fetch from K8s API and cache for other workers
         _continue = None
         while True:
             resource_handle_list = await Poolboy.custom_objects_api.list_namespaced_custom_object(
@@ -558,12 +553,15 @@ class ResourceHandle(KopfObject):
                 namespace=Poolboy.namespace,
                 plural='resourcehandles',
                 version=Poolboy.operator_version,
-                _continue = _continue,
-                limit = 50,
+                _continue=_continue,
+                limit=50,
             )
             for definition in resource_handle_list['items']:
                 resource_handle = cls.from_definition(definition)
                 if not resource_handle.is_bound:
+                    # Cache for other workers
+                    resource_handle.cache_set(CacheTag.HANDLE, resource_handle.name, ttl=300)
+                    resource_handle.cache_set(CacheTag.HANDLE_UNBOUND, resource_handle.name, ttl=300)
                     resource_handles.append(resource_handle)
             _continue = resource_handle_list['metadata'].get('continue')
             if not _continue:
@@ -602,7 +600,7 @@ class ResourceHandle(KopfObject):
         uid: str,
     ) -> ResourceHandleT:
         async with cls.class_lock:
-            resource_handle = cls.all_instances.get(name)
+            resource_handle = cls.cache_get(CacheTag.HANDLE, name)
             if resource_handle:
                 resource_handle.refresh(
                     annotations = annotations,
@@ -632,82 +630,40 @@ class ResourceHandle(KopfObject):
             return cls.__register_definition(definition)
 
     @classmethod
-    async def stop_watch_other(cls) -> None:
-        if cls.watch_other_task is None:
-            return
-        cls.watch_other_task.cancel()
-        await cls.watch_other_task
-
-    @classmethod
     async def unregister(cls, name: str) -> ResourceHandleT|None:
         async with cls.class_lock:
-            resource_handle = cls.all_instances.pop(name, None)
+            resource_handle = cls.cache_get(CacheTag.HANDLE, name)
             if resource_handle:
                 resource_handle.__unregister()
                 return resource_handle
-
-    @classmethod
-    async def watch_other(cls, logger) -> None:
-        while True:
-            try:
-                # FIXME - clear stale cache entries
-                await cls.__watch_other(logger)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
-                if exception.status != 410:
-                    logger.exception("Error watching other resourcehandles")
-                    await asyncio.sleep(10)
-            except:
-                logger.exception("Error watching other resourcehandles")
-                await asyncio.sleep(10)
-
-    @classmethod
-    async def __watch_other(cls, logger) -> None:
-        watch = kubernetes_asyncio.watch.Watch()
-        async for event in watch.stream(
-            Poolboy.custom_objects_api.list_namespaced_custom_object,
-            group=cls.api_group,
-            label_selector=f"!{Poolboy.ignore_label},{Poolboy.resource_handler_idx_label}!={Poolboy.resource_handler_idx}",
-            namespace=Poolboy.namespace,
-            plural=cls.plural,
-            version=cls.api_version,
-        ):
-            event_obj = event['object']
-            event_type = event['type']
-            if event_type == 'DELETED':
-                await cls.unregister(event_obj['metadata']['name'])
-            else:
-                await cls.register_definition(event_obj)
+            return None
 
     def __str__(self) -> str:
         return f"ResourceHandle {self.name}"
 
     def __register(self) -> None:
         """
-        Add ResourceHandle to register of bound or unbound instances.
+        Add ResourceHandle to cache of bound or unbound instances.
         This method must be called with the ResourceHandle.lock held.
         """
         # Ensure deleting resource handles are not cached
         if self.is_deleting:
             self.__unregister()
             return
-        self.all_instances[self.name] = self
+        self.cache_set(CacheTag.HANDLE, self.name, ttl=300)
         if self.is_bound:
-            self.bound_instances[(
-                self.resource_claim_namespace,
-                self.resource_claim_name
-            )] = self
-            self.unbound_instances.pop(self.name, None)
+            bound_key = f"{self.resource_claim_namespace}/{self.resource_claim_name}"
+            Cache.set(CacheTag.HANDLE_BOUND, bound_key, self, ttl=300)
+            Cache.delete(CacheTag.HANDLE_UNBOUND, self.name)
         else:
-            self.unbound_instances[self.name] = self
+            self.cache_set(CacheTag.HANDLE_UNBOUND, self.name, ttl=300)
 
     def __unregister(self) -> None:
-        self.all_instances.pop(self.name, None)
-        self.unbound_instances.pop(self.name, None)
+        Cache.delete(CacheTag.HANDLE, self.name)
+        Cache.delete(CacheTag.HANDLE_UNBOUND, self.name)
         if self.is_bound:
-            self.bound_instances.pop(
-                (self.resource_claim_namespace, self.resource_claim_name),
-                None,
-            )
+            bound_key = f"{self.resource_claim_namespace}/{self.resource_claim_name}"
+            Cache.delete(CacheTag.HANDLE_BOUND, bound_key)
 
     @property
     def guid(self) -> str:
@@ -819,11 +775,6 @@ class ResourceHandle(KopfObject):
     @property
     def resource_claim_namespace(self) -> str|None:
         return self.spec.get('resourceClaim', {}).get('namespace')
-
-    @property
-    def resource_handler_idx(self) -> int:
-        """Label value used to select which resource handler pod should manage this ResourceHandle."""
-        return int(UUID(self.uid)) % Poolboy.resource_handler_count
 
     @property
     def resource_pool_name(self) -> str|None:
@@ -939,9 +890,9 @@ class ResourceHandle(KopfObject):
                     return
                 await self.json_patch_status(patch)
                 return
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            except kubernetes_asyncio.client.exceptions.ApiException as e:
                 if attempt > 2:
-                    logger.exception(f"{self} failed status patch: {patch}")
+                    logger.warning(f"{self} status patch failed ({e.status}): {patch}")
                     raise
                 attempt += 1
 
@@ -976,7 +927,7 @@ class ResourceHandle(KopfObject):
             resource_handle = self,
         )
 
-        if not 'resources' in self.spec:
+        if 'resources' not in self.spec:
             await self.json_patch([{
                 "op": "add",
                 "path": "/spec/resources",
@@ -1072,34 +1023,6 @@ class ResourceHandle(KopfObject):
         else:
             self.status['resources'][resource_index]['state'] = value
 
-    async def assign_resource_handler(self):
-        """Apply label to indicate resource handler should manage this ResourceHandle.
-        Do not change label on items which are deleting."""
-        if (
-            self.deletion_timestamp is None and
-            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
-        ):
-            try:
-                patch = [{
-                    "op": "test",
-                    "path": "/metadata/deletionTimestamp",
-                    "value": None,
-                }]
-                patch.append({
-                    "op": "add",
-                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
-                    "value": str(self.resource_handler_idx),
-                } if self.labels else {
-                    "op": "add",
-                    "path": f"/metadata/labels",
-                    "value": {
-                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
-                    }
-                })
-                await self.json_patch(patch)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
-                pass
-
     async def get_resource_claim(self, not_found_okay: bool) -> ResourceClaimT|None:
         if not self.is_bound:
             return None
@@ -1107,7 +1030,7 @@ class ResourceHandle(KopfObject):
             return await resourceclaim.ResourceClaim.get(
                 name = self.resource_claim_name,
                 namespace = self.resource_claim_namespace,
-                use_cache = Poolboy.operator_mode_all_in_one,
+                use_cache = Poolboy.operator_mode_standalone,
             )
         except kubernetes_asyncio.client.exceptions.ApiException as e:
             if e.status == 404 and not_found_okay:
@@ -1150,7 +1073,7 @@ class ResourceHandle(KopfObject):
                     name=reference['name'],
                     namespace=reference.get('namespace'),
                     not_found_okay=True,
-                    use_cache=Poolboy.operator_mode_all_in_one,
+                    use_cache=Poolboy.operator_mode_standalone,
                 )
             )
         return resource_states
@@ -1405,7 +1328,21 @@ class ResourceHandle(KopfObject):
                     if exception.status != 409:
                         raise
 
-            if resource_claim:
+            # Update handle status with resource states immediately after changes.
+            # This is only needed in worker context where ResourceWatch timing
+            # may be unreliable due to running in separate processes.
+            if Poolboy.is_worker and (resources_to_create or patch):
+                # Refetch to sync in-memory object with API after patches were applied
+                await self.refetch()
+                # Re-fetch claim to ensure we have the latest version
+                if self.is_bound:
+                    resource_claim = await self.get_resource_claim(not_found_okay=True)
+                await self.update_status(
+                    logger=logger,
+                    resource_states=resource_states,
+                    resource_claim=resource_claim,
+                )
+            elif resource_claim:
                 await resource_claim.update_status_from_handle(
                     logger=logger,
                     resource_handle=self,
@@ -1559,21 +1496,23 @@ class ResourceHandle(KopfObject):
                             "path": "/status/summary",
                             "value": status_summary,
                         })
-            except kubernetes_asyncio.client.exceptions.ApiException:
-                logger.exception(
-                    f"Failed to get ResourceProvider {self.resource_provider_name} for {self}"
+            except kubernetes_asyncio.client.exceptions.ApiException as e:
+                logger.warning(
+                    f"Failed to get ResourceProvider {self.resource_provider_name} "
+                    f"for {self} ({e.status})"
                 )
             except Exception:
                 logger.exception(f"Failed to generate status summary for {self}")
         if patch:
+            patch_attempt = 0
             while True:
                 try:
                     await self.json_patch_status(patch)
                     break
-                except kubernetes_asyncio.client.exceptions.ApiException:
+                except kubernetes_asyncio.client.exceptions.ApiException as e:
                     patch_attempt += 1
                     if patch_attempt > 5:
-                        logger.exception(f"Failed to patch status on {self}")
+                        logger.warning(f"Failed to patch status on {self} ({e.status})")
                         return
                     await asyncio.sleep(0.2)
 

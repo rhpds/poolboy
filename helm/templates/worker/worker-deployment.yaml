@@ -1,0 +1,91 @@
+{{- /* Worker deployment - auto-enabled when operatorMode is 'distributed' */ -}}
+{{- if or .Values.worker.enabled (eq .Values.operatorMode "distributed") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "poolboy.name" . }}-worker
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  {{- if not .Values.worker.hpa.enabled }}
+  replicas: {{ .Values.worker.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "poolboy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: worker
+          image: "{{ include "poolboy.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "/opt/app-root/operator/poolboy_worker.py"]
+          args:
+            - "-A"
+            - "processor.app"
+            - "worker"
+            {{- with .Values.worker.args }}
+            - "--loglevel={{ .loglevel | default "info" }}"
+            - "--concurrency={{ .concurrency | default 4 }}"
+            - "--pool={{ .pool | default "prefork" }}"
+            - "--max-tasks-per-child={{ .maxTasksPerChild | default 100 }}"
+            {{- end }}
+          {{- if .Values.worker.metrics.enabled }}
+          ports:
+            - name: worker-metrics
+              containerPort: {{ .Values.worker.metrics.port | default 9090 }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "poolboy.name" . }}-worker-cm
+            {{- with .Values.worker.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- range $key, $value := .Values.worker.extraEnvVars }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: OPERATOR_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          {{- if .Values.worker.metrics.enabled }}
+          volumeMounts:
+            - name: prometheus-metrics
+              mountPath: /tmp/prometheus_metrics
+          {{- end }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if .Values.worker.metrics.enabled }}
+      volumes:
+        - name: prometheus-metrics
+          emptyDir: {}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "poolboy.serviceAccountName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

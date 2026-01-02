@@ -2,13 +2,14 @@ import asyncio
 import re
 from copy import deepcopy
 from datetime import timedelta
-from typing import List, Mapping, TypeVar
+from typing import List, Mapping, Optional, TypeVar
 
 import jinja2
 import jsonpointer
 import kopf
 import poolboy_k8s
 import pytimeparse
+from cache import Cache, CacheTag
 from deep_merge import deep_merge
 from jsonpatch_from_diff import jsonpatch_from_diff
 from metrics.timer_decorator import TimerDecoratorMeta
@@ -144,26 +145,41 @@ class _ValidationException(Exception):
 
 
 class ResourceProvider(metaclass=TimerDecoratorMeta):
-    instances = {}
     lock = asyncio.Lock()
+
+    @classmethod
+    def __cache_get(cls, name: str) -> Optional[ResourceProviderT]:
+        """Get ResourceProvider from cache."""
+        cached = Cache.get(CacheTag.PROVIDER, name)
+        if cached is None:
+            return None
+        if isinstance(cached, cls):
+            return cached
+        # RedisBackend returns dict, reconstruct
+        return cls(definition=cached)
+
+    def __cache_set(self, ttl: int = 300) -> None:
+        """Store ResourceProvider in cache."""
+        # Store the definition dict for Redis compatibility
+        Cache.set(CacheTag.PROVIDER, self.name, self.definition, ttl)
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceProviderT:
         name = definition['metadata']['name']
-        resource_provider = cls.instances.get(name)
+        resource_provider = cls.__cache_get(name)
         if resource_provider:
-            resource_provider.definition = definition
-            self.__init_resource_template_validator()
+            resource_provider.__init__(definition=definition)
         else:
             resource_provider = cls(definition=definition)
-            cls.instances[name] = resource_provider
+        resource_provider.__cache_set(ttl=300)
         return resource_provider
 
     @classmethod
     def find_provider_by_template_match(cls, template: Mapping) -> ResourceProviderT:
         provider_matches = []
-        for provider in cls.instances.values():
-            if provider.is_match_for_template(template):
+        for name in Cache.get_keys_by_tag(CacheTag.PROVIDER):
+            provider = cls.__cache_get(name)
+            if provider and provider.is_match_for_template(template):
                 provider_matches.append(provider)
         if len(provider_matches) == 0:
             raise kopf.TemporaryError("Unable to match template to ResourceProvider", delay=60)
@@ -175,7 +191,7 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
     @classmethod
     async def get(cls, name: str) -> ResourceProviderT:
         async with cls.lock:
-            resource_provider = cls.instances.get(name)
+            resource_provider = cls.__cache_get(name)
             if resource_provider:
                 return resource_provider
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
@@ -210,9 +226,10 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
     async def register(cls, definition: Mapping, logger: kopf.ObjectLogger) -> ResourceProviderT:
         async with cls.lock:
             name = definition['metadata']['name']
-            resource_provider = cls.instances.get(name)
+            resource_provider = cls.__cache_get(name)
             if resource_provider:
                 resource_provider.__init__(definition=definition)
+                resource_provider.__cache_set(ttl=300)
                 logger.debug(f"Refreshed definition of ResourceProvider {name}")
             else:
                 resource_provider = cls.__register_definition(definition=definition)
@@ -222,11 +239,14 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
     @classmethod
     async def unregister(cls, name: str, logger: kopf.ObjectLogger) -> ResourceProviderT|None:
         async with cls.lock:
-            if name in cls.instances:
+            resource_provider = cls.__cache_get(name)
+            if resource_provider:
+                Cache.delete(CacheTag.PROVIDER, name)
                 logger.debug(f"Unregistered ResourceProvider {name}")
-                return cls.instances.pop(name)
+            return resource_provider
 
     def __init__(self, definition: Mapping) -> None:
+        self._definition = definition
         self.meta = definition['metadata']
         self.spec = definition['spec']
         self.__init_resource_template_validator()
@@ -240,6 +260,11 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
 
     def __str__(self) -> str:
         return f"ResourceProvider {self.name}"
+
+    @property
+    def definition(self) -> Mapping:
+        """Return the full resource definition for cache serialization."""
+        return self._definition
 
     @property
     def approval_pending_message(self) -> bool:

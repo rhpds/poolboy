@@ -1,0 +1,19 @@
+{{- if and .Values.flower.enabled .Values.flower.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "poolboy.name" . }}-flower-pvc
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.flower.persistence.storageClass }}
+  storageClassName: {{ .Values.flower.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.flower.persistence.size }}
+{{- end }}

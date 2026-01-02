@@ -1,3 +1,5 @@
+"""Prometheus metrics module for Poolboy operator and workers."""
+
 from .app_metrics import AppMetrics
 from .metrics_service import MetricsService
 from .timer_decorator import TimerDecoratorMeta, async_timer, sync_timer

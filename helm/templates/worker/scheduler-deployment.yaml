@@ -1,0 +1,89 @@
+{{- /* Scheduler deployment - auto-enabled when operatorMode is 'distributed' */ -}}
+{{- if or .Values.scheduler.enabled (eq .Values.operatorMode "distributed") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "poolboy.name" . }}-scheduler
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "poolboy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: scheduler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "poolboy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: "{{ include "poolboy.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "/opt/app-root/operator/poolboy_worker.py"]
+          args:
+            - "-A"
+            - "processor.app"
+            - "beat"
+            - "--loglevel={{ .Values.scheduler.config.logging.level | lower }}"
+            - "--schedule=/tmp/celerybeat-schedule"
+          envFrom:
+            - configMapRef:
+                name: {{ include "poolboy.name" . }}-worker-cm
+            {{- with .Values.scheduler.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- range $key, $value := .Values.scheduler.extraEnvVars }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: CELERY_SCHEDULER_ENABLED
+              value: "true"
+            - name: CELERY_SCHEDULE_CONFIG
+              value: "/etc/poolboy/schedule_config.yaml"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: ""
+            - name: WORKER_METRICS_ENABLED
+              value: "false"
+          resources:
+            {{- toYaml .Values.scheduler.resources | nindent 12 }}
+          volumeMounts:
+            - name: schedule-data
+              mountPath: /tmp
+            - name: scheduler-cm
+              mountPath: /etc/poolboy
+              readOnly: true
+      volumes:
+        - name: schedule-data
+          emptyDir: {}
+        - name: scheduler-cm
+          configMap:
+            name: {{ include "poolboy.name" . }}-scheduler-cm
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "poolboy.serviceAccountName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+

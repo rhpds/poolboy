@@ -1,0 +1,80 @@
+# Development environment values for Poolboy
+# Usage: helm template poolboy-dev helm -f helm/helm-vars-dev.yaml | oc apply -f -
+
+clusterDomain: apps-crc.testing
+
+# Use distributed mode with Celery workers for development
+operatorMode: distributed
+
+namespace:
+  name: poolboy-dev
+  create: false
+
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/poolboy-dev/poolboy
+  tagOverride: latest
+  pullPolicy: Always
+
+# ===========================================
+# Redis Configuration
+# ===========================================
+redis:
+  enabled: true
+
+# ===========================================
+# Worker Configuration
+# ===========================================
+worker:
+  enabled: true
+  replicas: 1
+  hpa:
+    enabled: false
+
+# ===========================================
+# Scheduler Configuration
+# ===========================================
+scheduler:
+  enabled: true
+
+# ===========================================
+# Celery Flower - Task Monitoring UI
+# ===========================================
+flower:
+  enabled: true
+  route:
+    enabled: true
+
+# ===========================================
+# Feature Flags - Enable Celery Workers
+# ===========================================
+useWorkers:
+  resourcePool:
+    enabled: true
+    daemonMode: "scheduler"
+    partitions: 2
+  resourceHandle:
+    enabled: true
+    daemonMode: "scheduler"
+    partitions: 4
+  resourceClaim:
+    enabled: true
+    daemonMode: "scheduler"
+    partitions: 4
+
+# ===========================================
+# Scheduled Tasks
+# ===========================================
+schedules:
+  maintain-all-pools:
+    enabled: true
+    schedule:
+      seconds: 30
+  maintain-all-handles:
+    enabled: true
+    schedule:
+      seconds: 60
+  maintain-all-claims:
+    enabled: true
+    schedule:
+      seconds: 60
+

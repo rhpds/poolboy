@@ -1,20 +1,17 @@
 import asyncio
-
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import List, Mapping, TypeVar
-from uuid import UUID
 
 import kopf
 import kubernetes_asyncio
-
+import resourcehandle
+import resourceprovider
+from cache import Cache, CacheTag
 from deep_merge import deep_merge
 from kopfobject import KopfObject
 from poolboy import Poolboy
 from poolboy_templating import recursive_process_template_strings
-
-import resourcehandle
-import resourceprovider
 
 ResourceClaimT = TypeVar('ResourceClaimT', bound='ResourceClaim')
 ResourceHandleT = TypeVar('ResourceHandleT', bound='ResourceHandle')
@@ -43,7 +40,7 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
         ret["status"] = {
             key: value
             for key, value in resource['status'].items()
-            if not key in {'diffBase'}
+            if key not in {'diffBase'}
         }
     return ret
 
@@ -53,14 +50,14 @@ class ResourceClaim(KopfObject):
     kind = "ResourceClaim"
     plural = "resourceclaims"
 
-    instances = {}
     class_lock = asyncio.Lock()
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceClaimT:
         name = definition['metadata']['name']
         namespace = definition['metadata']['namespace']
-        resource_claim = cls.instances.get((namespace, name))
+        cache_key = f"{namespace}/{name}"
+        resource_claim = cls.cache_get(CacheTag.CLAIM, cache_key)
         if resource_claim:
             resource_claim.refresh_from_definition(definition=definition)
         else:
@@ -74,14 +71,17 @@ class ResourceClaim(KopfObject):
                 status = definition.get('status', {}),
                 uid = definition['metadata']['uid'],
             )
-            cls.instances[(namespace, name)] = resource_claim
+        resource_claim.cache_set(CacheTag.CLAIM, cache_key, ttl=300)
         return resource_claim
 
     @classmethod
     async def get(cls, name: str, namespace: str, use_cache: bool=True) -> ResourceClaimT:
         async with cls.class_lock:
-            if use_cache and (namespace, name) in cls.instances:
-                return cls.instances[(namespace, name)]
+            cache_key = f"{namespace}/{name}"
+            if use_cache:
+                cached = cls.cache_get(CacheTag.CLAIM, cache_key)
+                if cached:
+                    return cached
             definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
                 group=cls.api_group,
                 name=name,
@@ -106,7 +106,8 @@ class ResourceClaim(KopfObject):
         uid: str,
     ) -> ResourceClaimT:
         async with cls.class_lock:
-            resource_claim = cls.instances.get((namespace, name))
+            cache_key = f"{namespace}/{name}"
+            resource_claim = cls.cache_get(CacheTag.CLAIM, cache_key)
             if resource_claim:
                 resource_claim.refresh(
                     annotations = annotations,
@@ -127,7 +128,7 @@ class ResourceClaim(KopfObject):
                     status = status,
                     uid = uid,
                 )
-                cls.instances[(namespace, name)] = resource_claim
+            resource_claim.cache_set(CacheTag.CLAIM, cache_key, ttl=300)
             return resource_claim
 
     @classmethod
@@ -141,7 +142,11 @@ class ResourceClaim(KopfObject):
     @classmethod
     async def unregister(cls, name: str, namespace: str) -> ResourceClaimT|None:
         async with cls.class_lock:
-            return cls.instances.pop((namespace, name), None)
+            cache_key = f"{namespace}/{name}"
+            resource_claim = cls.cache_get(CacheTag.CLAIM, cache_key)
+            if resource_claim:
+                Cache.delete(CacheTag.CLAIM, cache_key)
+            return resource_claim
 
     @property
     def approval_state(self) -> str|None:
@@ -181,11 +186,11 @@ class ResourceClaim(KopfObject):
     def have_resource_providers(self) -> bool:
         """Return whether this ResourceClaim has ResourceProviders assigned for all resources."""
         if not self.status \
-        or not 'resources' in self.status \
+        or 'resources' not in self.status \
         or len(self.spec.get('resources', [])) > len(self.status.get('resources', [])):
             return False
         for resource in self.status.get('resources', []):
-            if not 'provider' in resource:
+            if 'provider' not in resource:
                 return False
         return True
 
@@ -300,11 +305,6 @@ class ResourceClaim(KopfObject):
         return self.status.get('resourceHandle', {}).get('namespace')
 
     @property
-    def resource_handler_idx(self) -> int:
-        """Label value used to select which resource handler pod should manage this ResourceClaim."""
-        return int(UUID(self.uid)) % Poolboy.resource_handler_count
-
-    @property
     def resource_pool_name(self):
         if not self.annotations:
             return None
@@ -345,34 +345,6 @@ class ResourceClaim(KopfObject):
             if 'validationError' in resource:
                 return True
         return False
-
-    async def assign_resource_handler(self):
-        """Apply label to indicate resource handler should manage this ResourceClaim.
-        Do not change label on items which are deleting."""
-        if (
-            self.deletion_timestamp is None and
-            self.labels.get(Poolboy.resource_handler_idx_label) != str(self.resource_handler_idx)
-        ):
-            try:
-                patch = [{
-                    "op": "test",
-                    "path": "/metadata/deletionTimestamp",
-                    "value": None,
-                }]
-                patch.append({
-                    "op": "add",
-                    "path": f"/metadata/labels/{Poolboy.resource_handler_idx_label.replace('/', '~1')}",
-                    "value": str(self.resource_handler_idx),
-                } if self.labels else {
-                    "op": "add",
-                    "path": f"/metadata/labels",
-                    "value": {
-                        Poolboy.resource_handler_idx_label: str(self.resource_handler_idx),
-                    }
-                })
-                await self.json_patch(patch)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
-                pass
 
     async def bind_resource_handle(self,
         logger: kopf.ObjectLogger,
@@ -473,7 +445,7 @@ class ResourceClaim(KopfObject):
 
     def get_resource_state_from_status(self, resource_index):
         if not self.status \
-        or not 'resources' in self.status \
+        or 'resources' not in self.status \
         or resource_index >= len(self.status['resources']):
             return None
         return self.status['resources'][resource_index].get('state')
@@ -505,7 +477,7 @@ class ResourceClaim(KopfObject):
                     # Adjust requested end if unchanged from default
                     if not self.requested_lifespan_end_datetime \
                     or lifespan_default_timedelta == self.requested_lifespan_end_datetime - self.lifespan_start_datetime:
-                        logger.info(f"Resetting default lifespan end on first ready")
+                        logger.info("Resetting default lifespan end on first ready")
                         await self.set_requested_lifespan_end(
                             datetime.now(timezone.utc) + lifespan_default_timedelta
                         )
@@ -671,7 +643,7 @@ class ResourceClaim(KopfObject):
             elif 'template' in resource:
                 provider = resourceprovider.ResourceProvider.find_provider_by_template_match(resource['template'])
             else:
-                raise kopf.TemporaryError(f"ResourceClaim spec.resources require either an explicit provider or a resource template to match.", delay=600)
+                raise kopf.TemporaryError("ResourceClaim spec.resources require either an explicit provider or a resource template to match.", delay=600)
             providers.append(provider)
 
         await self.merge_patch_status({
@@ -780,7 +752,7 @@ class ResourceClaim(KopfObject):
                         f"{self} has both spec.provider and spec.resources!",
                         delay = 600
                     )
-                if not 'provider' in self.status:
+                if 'provider' not in self.status:
                     await self.merge_patch_status({
                         "provider": {
                             "name": self.resource_provider_name_from_spec
@@ -818,7 +790,7 @@ class ResourceClaim(KopfObject):
                     })
 
                 if resource_provider.approval_required:
-                    if not 'approval' in self.status:
+                    if 'approval' not in self.status:
                         await self.merge_patch_status({
                             "approval": {
                                 "message": resource_provider.approval_pending_message,
@@ -959,7 +931,7 @@ class ResourceClaim(KopfObject):
 
             set_lifespan_end_timestamp = set_lifespan_end.strftime('%FT%TZ')
 
-            if not 'lifespan' in resource_handle.spec:
+            if 'lifespan' not in resource_handle.spec:
                 logger.info(f"Setting lifespan end for {resource_handle} to {set_lifespan_end_timestamp}")
                 patch.append({
                     "op": "add",

@@ -1,22 +1,18 @@
 import asyncio
+import logging
+from base64 import urlsafe_b64encode
+from datetime import datetime, timezone
+from hashlib import sha256
+from typing import Mapping, TypeVar
+
 import inflection
 import kopf
 import kubernetes_asyncio
-import logging
-
-from copy import deepcopy
-from datetime import datetime, timezone
-from typing import Mapping, TypeVar
-
-from base64 import urlsafe_b64encode
-from hashlib import sha256
-
 import poolboy_k8s
-
+import resourcehandle
+from cache import Cache, CacheTag
 from kopfobject import KopfObject
 from poolboy import Poolboy
-import resourcehandle
-import resourceprovider
 
 logger = logging.getLogger('resource_watch')
 
@@ -35,17 +31,7 @@ class ResourceWatch(KopfObject):
     kind = "ResourceWatch"
     plural = "resourcewatches"
 
-    instances = {}
     class_lock = asyncio.Lock()
-
-    class CacheEntry:
-        def __init__(self, resource: Mapping):
-            self.resource = resource
-            self.cache_datetime = datetime.now(timezone.utc)
-
-        @property
-        def is_expired(self):
-            return (datetime.now(timezone.utc) - self.cache_datetime).total_seconds() > Poolboy.resource_refresh_interval
 
     @classmethod
     def __instance_key(cls, api_version: str, kind: str, namespace: str|None) -> str:
@@ -71,14 +57,13 @@ class ResourceWatch(KopfObject):
         kind: str,
         namespace: str|None,
     ):
-        """Return ResourceWatch from instances dict."""
-        return cls.instances.get(
-            cls.__instance_key(
-                api_version=api_version,
-                kind=kind,
-                namespace=namespace
-            )
+        """Return ResourceWatch from cache."""
+        instance_key = cls.__instance_key(
+            api_version=api_version,
+            kind=kind,
+            namespace=namespace
         )
+        return cls.cache_get(CacheTag.WATCH, instance_key)
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceWatchT:
@@ -284,8 +269,9 @@ class ResourceWatch(KopfObject):
         """Stop all ResourceWatch tasks"""
         async with cls.class_lock:
             tasks = []
-            for resource_watch in cls.instances.values():
-                if resource_watch.task is not None:
+            for instance_key in Cache.get_keys_by_tag(CacheTag.WATCH):
+                resource_watch = cls.cache_get(CacheTag.WATCH, instance_key)
+                if resource_watch and resource_watch.task is not None:
                     resource_watch.task.cancel()
                     tasks.append(resource_watch.task)
             if tasks:
@@ -311,16 +297,14 @@ class ResourceWatch(KopfObject):
             status=status,
             uid=uid,
         )
-        # Cache to store fetched resources
-        self.cache = {}
         # Task for when watch is running
         self.task = None
 
     def __register(self) -> None:
         """
-        Add ResourceWatch to register of instances.
+        Add ResourceWatch to cache.
         """
-        self.instances[self.__self_instance_key] = self
+        self.cache_set(CacheTag.WATCH, self.__self_instance_key(), ttl=300)
 
     def __str__(self) -> str:
         return (
@@ -331,9 +315,9 @@ class ResourceWatch(KopfObject):
 
     def __self_instance_key(self) -> str:
         return self.__instance_key(
-            api_version=self.api_version,
-            kind=self.kind,
-            namespace=self.namespace,
+            api_version=self.watch_api_version,
+            kind=self.watch_kind,
+            namespace=self.watch_namespace,
         )
 
     @property
@@ -352,99 +336,20 @@ class ResourceWatch(KopfObject):
     def watch_namespace(self) -> str|None:
         return self.spec.get('namespace')
 
-    def cache_clean(self):
-        self.cache = {
-            name: cache_entry
-            for name, cache_entry in self.cache.items()
-            if not cache_entry.is_expired
-        }
-
-    async def create_pod(self,
-        logger: kopf.ObjectLogger,
-    ) -> None:
-        replicaset = kubernetes_asyncio.client.V1ReplicaSet(
-            api_version="apps/v1",
-            kind="ReplicaSet",
-            metadata=kubernetes_asyncio.client.V1ObjectMeta(
-                name=f"{Poolboy.manager_pod.metadata.name}-watch-{self.name_hash}",
-                namespace=Poolboy.namespace,
-                owner_references=[
-                    kubernetes_asyncio.client.V1OwnerReference(
-                        api_version=Poolboy.manager_pod.api_version,
-                        controller=True,
-                        kind=Poolboy.manager_pod.kind,
-                        name=Poolboy.manager_pod.metadata.name,
-                        uid=Poolboy.manager_pod.metadata.uid,
-                    )
-                ]
-            ),
-        )
-        replicaset.spec = kubernetes_asyncio.client.V1ReplicaSetSpec(
-            replicas=1,
-            selector=kubernetes_asyncio.client.V1LabelSelector(
-                match_labels={
-                    "app.kubernetes.io/name": Poolboy.manager_pod.metadata.name,
-                    "app.kubernetes.io/instance": f"watch-{self.name_hash}",
-                },
-            ),
-            template=kubernetes_asyncio.client.V1PodTemplateSpec(
-                metadata=kubernetes_asyncio.client.V1ObjectMeta(
-                    labels={
-                        "app.kubernetes.io/name": Poolboy.manager_pod.metadata.name,
-                        "app.kubernetes.io/instance": f"watch-{self.name_hash}",
-                    },
-                ),
-                spec=deepcopy(Poolboy.manager_pod.spec),
-            ),
-        )
-
-        replicaset.spec.template.spec.containers[0].env = [
-            env_var
-            for env_var in Poolboy.manager_pod.spec.containers[0].env
-            if env_var.name not in {
-                'OPERATOR_MODE',
-                'RESOURCE_HANDLER_COUNT',
-                'RESOURCE_HANDLER_RESOURCES',
-                'RESOURCE_WATCH_RESOURCES',
-            }
-        ]
-        replicaset.spec.template.spec.containers[0].env.append(
-            kubernetes_asyncio.client.V1EnvVar(
-                name='OPERATOR_MODE',
-                value='resource-watch',
-            )
-        )
-        replicaset.spec.template.spec.containers[0].env.append(
-            kubernetes_asyncio.client.V1EnvVar(
-                name='WATCH_NAME',
-                value=self.name,
-            )
-        )
-        replicaset.spec.template.spec.node_name = None
-        if Poolboy.resource_watch_resources:
-            replicaset.spec.template.spec.containers[0].resources = kubernetes_asyncio.client.V1ResourceRequirements(
-                limits=Poolboy.resource_watch_resources.get('limits'),
-                requests=Poolboy.resource_watch_resources.get('requests'),
-            )
-
-        replicaset = await Poolboy.apps_v1_api.create_namespaced_replica_set(
-            namespace=Poolboy.namespace,
-            body=replicaset,
-        )
-        logger.info(f"Created ReplicaSet {replicaset.metadata.name} for {self}")
+    def __resource_cache_key(self, name: str) -> str:
+        """Build unique cache key for a watched resource."""
+        return f"{self.name}:{name}"
 
     async def get_resource(self,
         name: str,
         not_found_okay: bool=False,
         use_cache: bool=True,
     ) -> Mapping|None:
+        resource_cache_key = self.__resource_cache_key(name)
         if use_cache:
-            cache_entry = self.cache.get(name)
-            if cache_entry:
-                if cache_entry.is_expired:
-                    self.cache.pop(name, None)
-                else:
-                    return cache_entry.resource
+            cached = Cache.get(CacheTag.WATCH_RESOURCE, resource_cache_key)
+            if cached:
+                return cached
         try:
             resource = await poolboy_k8s.get_object(
                 api_version=self.watch_api_version,
@@ -458,7 +363,7 @@ class ResourceWatch(KopfObject):
             else:
                 raise
         if use_cache and resource:
-            self.cache[name] = ResourceWatch.CacheEntry(resource)
+            Cache.set(CacheTag.WATCH_RESOURCE, resource_cache_key, resource, ttl=Poolboy.resource_refresh_interval)
         return resource
 
     async def start(self, logger) -> None:
@@ -504,7 +409,7 @@ class ResourceWatch(KopfObject):
                     watch_duration = (datetime.now(timezone.utc) - watch_start_dt).total_seconds()
                     if watch_duration < 60:
                         await asyncio.sleep(60 - watch_duration)
-                except Exception as e:
+                except Exception:
                     logger.exception(f"{self} exception")
                     watch_duration = (datetime.now(timezone.utc) - watch_start_dt).total_seconds()
                     if watch_duration < 60:
@@ -516,7 +421,6 @@ class ResourceWatch(KopfObject):
 
     async def __watch(self, method, **kwargs):
         watch = None
-        self.cache_clean()
         try:
             watch = kubernetes_asyncio.watch.Watch()
             async for event in watch.stream(method, **kwargs):
@@ -568,15 +472,16 @@ class ResourceWatch(KopfObject):
         if not resource_handle_name:
             return
 
+        resource_cache_key = self.__resource_cache_key(resource_name)
         if event_type == 'DELETED':
-            self.cache.pop(resource_name, None)
+            Cache.delete(CacheTag.WATCH_RESOURCE, resource_cache_key)
         else:
-            self.cache[resource_name] = ResourceWatch.CacheEntry(event_obj)
+            Cache.set(CacheTag.WATCH_RESOURCE, resource_cache_key, event_obj, ttl=Poolboy.resource_refresh_interval)
 
         try:
             resource_handle = await resourcehandle.ResourceHandle.get(
                 name=resource_handle_name,
-                use_cache=Poolboy.operator_mode_all_in_one,
+                use_cache=Poolboy.operator_mode_standalone,
             )
         except kubernetes_asyncio.client.exceptions.ApiException as exception:
             if exception.status == 404:
@@ -636,7 +541,7 @@ class ResourceWatch(KopfObject):
                 resource_claim=resource_claim,
                 resource_states=resource_states,
             )
-        except kubernetes_asyncio.client.exceptions.ApiException as exception:
+        except kubernetes_asyncio.client.exceptions.ApiException:
             logger.exception(
                 f"Failed updating status on {resource_handle} from event on {resource_description}"
             )

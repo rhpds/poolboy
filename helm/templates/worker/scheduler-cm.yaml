@@ -1,0 +1,16 @@
+{{- /* Scheduler ConfigMap - auto-enabled when operatorMode is 'distributed' */ -}}
+{{- if or .Values.scheduler.enabled (eq .Values.operatorMode "distributed") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "poolboy.name" . }}-scheduler-cm
+  namespace: {{ include "poolboy.namespaceName" . }}
+  labels:
+    {{- include "poolboy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler-cm
+data:
+  schedule_config.yaml: |
+    schedules:
+      {{- toYaml .Values.schedules | nindent 6 }}
+{{- end }}
+
