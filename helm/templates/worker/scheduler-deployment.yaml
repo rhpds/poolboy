@@ -28,6 +28,7 @@ spec:
         - name: scheduler
           image: "{{ include "poolboy.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /opt/app-root/operator
           command: ["celery"]
           args:
             - "-A"
@@ -42,6 +43,8 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
+            - name: PYTHONPATH
+              value: /opt/app-root/operator
             {{- range $key, $value := .Values.scheduler.extraEnvVars }}
             - name: {{ $key }}
               value: {{ $value | quote }}
