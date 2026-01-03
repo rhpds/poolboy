@@ -28,7 +28,7 @@ spec:
         - name: worker
           image: "{{ include "poolboy.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["python3", "/opt/app-root/operator/poolboy_worker.py"]
+          command: ["celery"]
           args:
             - "-A"
             - "processor.app"
