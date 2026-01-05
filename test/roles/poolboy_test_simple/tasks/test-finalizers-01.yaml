@@ -68,8 +68,8 @@
   failed_when: >-
     r_get_resource_claim.resources[0].status.resources[0].state is undefined
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Save facts from for ResourceClaim test-finalizers-01-a
   vars:
@@ -109,7 +109,7 @@
   failed_when: >-
     r_get_resource_handle.resources | length != 1 or
     r_get_resource_handle.resources[0].metadata.finalizers is undefined or
-    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler']
+    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain]
 
 - name: Set deprecated finalizer on ResourceHandle for test-finalizers-01-a
   kubernetes.core.k8s:

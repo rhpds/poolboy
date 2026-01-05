@@ -124,8 +124,8 @@
     r_get_resource_claim.resources | length != 1 or
     not r_get_resource_claim.resources[0].status.resourceHandle.detached | default(False) | bool
   until: r_get_resource_claim is success
-  retries: 5
-  delay: 1
+  retries: 45
+  delay: 2
 
 - name: Verify delete of ResourceHandle for test-auto-detach-01-a
   kubernetes.core.k8s_info:

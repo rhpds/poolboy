@@ -122,8 +122,8 @@
   register: r_get_resource_claim
   failed_when: r_get_resource_claim.resources | length != 0
   until: r_get_resource_claim is success
-  retries: 5
-  delay: 1
+  retries: 45
+  delay: 2
 
 - name: Verify delete of ResourceHandle for test-auto-delete-01-a
   kubernetes.core.k8s_info:

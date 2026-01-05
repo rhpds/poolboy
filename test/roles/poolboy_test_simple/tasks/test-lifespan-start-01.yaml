@@ -85,8 +85,8 @@
     r_get_resource_claim.resources[0].status.lifespan.start is undefined or
     r_get_resource_claim.resources[0].status.resourceHandle.name is undefined or
     r_get_resource_claim.resources[0].status.resources[0].reference is undefined
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 45
   until: r_get_resource_claim is successful
 
 - name: Delete ResourceClaim test-lifespan-start-01

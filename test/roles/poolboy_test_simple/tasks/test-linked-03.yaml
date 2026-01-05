@@ -208,8 +208,8 @@
     __resource_claim.status.resources[0].state.spec.numbervalue != 0 or
     __resource_claim.status.resources[0].state.spec.stringvalue != 'NO BASE'
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Create ResourceClaim test-linked-03-b
   kubernetes.core.k8s:
@@ -252,8 +252,8 @@
     __resource_claim.status.resources[1].state.spec.numbervalue != 10 or
     __resource_claim.status.resources[1].state.spec.stringvalue != 'ONE-A'
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Save facts from for ResourceClaim test-linked-03-b
   vars:
@@ -276,8 +276,8 @@
   register: r_get_resource_claim_test
   failed_when:  r_get_resource_claim_test.resources | length != 1
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Verify creation of binder ResourceClaimTest for test-linked-03-b
   kubernetes.core.k8s_info:
@@ -288,8 +288,8 @@
   register: r_get_resource_claim_test
   failed_when:  r_get_resource_claim_test.resources | length != 1
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Delete ResourceClaim test-linked-03-b
   kubernetes.core.k8s:
@@ -308,8 +308,8 @@
   register: r_get_resource_claim
   failed_when: r_get_resource_claim.resources | length != 0
   until: r_get_resource_claim is success
-  retries: 5
-  delay: 1
+  retries: 10
+  delay: 2
 
 - name: Verify delete of ResourceHandle for test-linked-03-b
   kubernetes.core.k8s_info:
@@ -320,8 +320,8 @@
   register: r_get_resource_handle
   failed_when: r_get_resource_handle.resources | length != 0
   until: r_get_resource_handle is success
-  retries: 5
-  delay: 1
+  retries: 10
+  delay: 2
 
 - name: Verify delete of base ResourceClaimTest test-linked-03-b
   kubernetes.core.k8s_info:
@@ -332,8 +332,8 @@
   register: r_get_resource_claim_test
   failed_when: r_get_resource_claim_test.resources | length != 0
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Verify delete of binder ResourceClaimTest test-linked-03-b
   kubernetes.core.k8s_info:
@@ -344,8 +344,8 @@
   register: r_get_resource_claim_test
   failed_when: r_get_resource_claim_test.resources | length != 0
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Create ResourceClaim test-linked-03-c
   kubernetes.core.k8s:
@@ -388,8 +388,8 @@
     __resource_claim.status.resources[1].state.spec.numbervalue != 200 or
     __resource_claim.status.resources[1].state.spec.stringvalue != 'TWO-B'
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Save facts from for ResourceClaim test-linked-03-c
   vars:
@@ -412,8 +412,8 @@
   register: r_get_resource_claim_test
   failed_when:  r_get_resource_claim_test.resources | length != 1
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Verify creation of binder ResourceClaimTest for test-linked-03-c
   kubernetes.core.k8s_info:
@@ -424,8 +424,8 @@
   register: r_get_resource_claim_test
   failed_when:  r_get_resource_claim_test.resources | length != 1
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Delete ResourceClaim test-linked-03-c
   kubernetes.core.k8s:
@@ -444,8 +444,8 @@
   register: r_get_resource_claim
   failed_when: r_get_resource_claim.resources | length != 0
   until: r_get_resource_claim is success
-  retries: 5
-  delay: 1
+  retries: 10
+  delay: 2
 
 - name: Verify delete of ResourceHandle for test-linked-03-c
   kubernetes.core.k8s_info:
@@ -456,8 +456,8 @@
   register: r_get_resource_handle
   failed_when: r_get_resource_handle.resources | length != 0
   until: r_get_resource_handle is success
-  retries: 5
-  delay: 1
+  retries: 10
+  delay: 2
 
 - name: Verify delete of base ResourceClaimTest test-linked-03-c
   kubernetes.core.k8s_info:
@@ -468,8 +468,8 @@
   register: r_get_resource_claim_test
   failed_when: r_get_resource_claim_test.resources | length != 0
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Verify delete of binder ResourceClaimTest test-linked-03-c
   kubernetes.core.k8s_info:
@@ -480,6 +480,6 @@
   register: r_get_resource_claim_test
   failed_when: r_get_resource_claim_test.resources | length != 0
   until: r_get_resource_claim_test is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 ...

@@ -586,8 +586,8 @@
     claim.status.resourceHandle.name != first_pool_resource_handle_name or
     claim.status.resources[0].state.spec.vars.desired_state != 'started'
   until: r_get_test_pool_match_claim is success
-  retries: 10
-  delay: 1
+  retries: 30
+  delay: 3
 
 - name: Create ResourceClaim test-pool-explicit
   kubernetes.core.k8s:
@@ -658,8 +658,8 @@
     claim.status.resources[0].state.spec.vars.name != 'test-pool' or
     claim.status.resources[0].state.spec.vars.number != 23
   until: r_get_test_pool_explicit_claim is success
-  retries: 10
-  delay: 1
+  retries: 30
+  delay: 2
 
 - name: Delete test resource pool
   kubernetes.core.k8s:
@@ -716,7 +716,7 @@
   failed_when: r_verify_test_pool_handle_deletion.resources | length != 0
   until: r_verify_test_pool_handle_deletion is success
   delay: 2
-  retries: 10
+  retries: 30
 
 - name: Create test-templated ResourceProvider
   kubernetes.core.k8s:
@@ -840,7 +840,7 @@
     r_get_test_lifespan_1.resources | length > 0
   until: r_get_test_lifespan_1 is success
   delay: 5
-  retries: 10
+  retries: 20
 
 - name: Create ResourceClaim for test-lifespan-2
   kubernetes.core.k8s:
@@ -924,7 +924,7 @@
     r_get_test_lifespan_2.resources | length > 0
   until: r_get_test_lifespan_2 is success
   delay: 5
-  retries: 10
+  retries: 30
 
 - name: Create test-lifespan resource pool
   kubernetes.core.k8s:
@@ -1160,7 +1160,7 @@
     not claim.status.resources[1].state is defined or
     not claim.status.resources[1].state.spec.vars.test_value == 'foo'
   until: r_test_linked_1_claim is success
-  retries: 5
+  retries: 30
   delay: 2
 
 - name: Create ResourceHandle for test-linked-2

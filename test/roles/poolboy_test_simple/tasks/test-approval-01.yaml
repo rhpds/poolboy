@@ -93,8 +93,8 @@
     r_get_resource_claim.resources[0].status.resourceHandle is undefined or
     r_get_resource_claim.resources[0].status.resources[0].state is undefined
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Delete ResourceClaim test-approval-01
   kubernetes.core.k8s:

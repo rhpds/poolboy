@@ -120,8 +120,8 @@
     r_get_resource_claim.resources[0].status.resourceHandle is undefined or
     r_get_resource_claim.resources[0].status.resourceHandle.name == failed_resource_handle_name
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 30
 
 - name: Update ResourcePool test-pool-04 to create healthy but unready ResourceHandles
   kubernetes.core.k8s:

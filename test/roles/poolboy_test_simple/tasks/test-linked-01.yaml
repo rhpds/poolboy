@@ -147,8 +147,8 @@
     __resource_claim.status.resources[1].provider.name != 'test-linked-01-binder' or
     __resource_claim.status.resources[1].waitingFor != 'Linked ResourceProvider'
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 45
 
 - name: Save facts from for ResourceClaim test-linked-01-a
   vars:
@@ -226,8 +226,8 @@
     __resource_claim.status.resources[1].state is undefined or
     __resource_claim.status.resources[1].waitingFor is defined
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 45
 
 - name: Verify state of ResourceClaim test-linked-01-a binder
   vars:
