@@ -47,25 +47,16 @@ class ResourceHandleMatch:
         if self.template_difference_count > cmp.template_difference_count:
             return False
 
-        # Prefer healthy resources to unknown health state
-        if self.resource_handle.is_healthy and cmp.resource_handle.is_healthy is None:
+        if self.resource_handle.is_healthy and cmp.resource_handle.is_healthy is False:
             return True
-        if self.resource_handle.is_healthy is None and cmp.resource_handle.is_healthy:
+        if self.resource_handle.is_healthy is False and cmp.resource_handle.is_healthy:
             return False
 
-        # Prefer ready resources to unready or unknown readiness state
         if self.resource_handle.is_ready and not cmp.resource_handle.is_ready:
             return True
         if not self.resource_handle.is_ready and cmp.resource_handle.is_ready:
             return False
 
-        # Prefer unknown readiness state to known unready state
-        if self.resource_handle.is_ready is None and cmp.resource_handle.is_ready is False:
-            return True
-        if self.resource_handle.is_ready is not False and cmp.resource_handle.is_ready is None:
-            return False
-
-        # Prefer older matches
         return self.resource_handle.creation_timestamp < cmp.resource_handle.creation_timestamp
 
 class ResourceHandle(KopfObject):
