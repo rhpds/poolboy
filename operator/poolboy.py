@@ -11,18 +11,9 @@ class Poolboy():
     manage_handles_interval = int(os.environ.get('MANAGE_HANDLES_INTERVAL', 60))
     manage_pools_interval = int(os.environ.get('MANAGE_POOLS_INTERVAL', 10))
 
-    # Operator mode: 'standalone' or 'distributed'
-    # Backward compatibility:
-    #   - 'all-in-one' maps to 'standalone'
-    #   - 'manager', 'resource-handler', 'resource-watch' map to 'distributed'
-    _operator_mode_raw = os.environ.get('OPERATOR_MODE', 'distributed')
-    operator_mode = (
-        'standalone' if _operator_mode_raw == 'all-in-one'
-        else 'distributed' if _operator_mode_raw in ('manager', 'resource-handler', 'resource-watch')
-        else _operator_mode_raw
-    )
-    operator_mode_distributed = operator_mode == 'distributed'
-    operator_mode_standalone = operator_mode == 'standalone'
+    # Operator mode: standalone (local) or distributed (Celery workers)
+    # IS_STANDALONE is set by Helm based on operatorMode value
+    is_standalone = os.environ.get('IS_STANDALONE', 'false').lower() == 'true'
 
     operator_domain = os.environ.get('OPERATOR_DOMAIN', 'poolboy.gpte.redhat.com')
     operator_version = os.environ.get('OPERATOR_VERSION', 'v1')
@@ -53,20 +44,9 @@ class Poolboy():
     # TODO: Remove after all production clusters migrated (used for cleanup only)
     resource_handler_idx_label = f"{operator_domain}/resource-handler-idx"
 
-    # Worker feature flags (loaded from environment)
-    # When True, delegate processing to Celery workers
-    # When False, process synchronously in the main operator (current behavior)
+    # Worker retry config (used by Celery tasks)
     workers_error_retry_countdown = int(os.environ.get('WORKERS_ERROR_RETRY_COUNTDOWN', '30'))
     workers_lock_retry_countdown = int(os.environ.get('WORKERS_LOCK_RETRY_COUNTDOWN', '3'))
-    workers_resource_pool = os.environ.get('WORKERS_RESOURCE_POOL', 'false').lower() == 'true'
-    workers_resource_pool_daemon_mode = os.environ.get('WORKERS_RESOURCE_POOL_DAEMON_MODE', 'scheduler')
-    workers_resource_handle = os.environ.get('WORKERS_RESOURCE_HANDLE', 'false').lower() == 'true'
-    workers_resource_handle_daemon_mode = os.environ.get('WORKERS_RESOURCE_HANDLE_DAEMON_MODE', 'scheduler')
-    workers_resource_claim = os.environ.get('WORKERS_RESOURCE_CLAIM', 'false').lower() == 'true'
-    workers_resource_claim_daemon_mode = os.environ.get('WORKERS_RESOURCE_CLAIM_DAEMON_MODE', 'scheduler')
-    workers_resource_provider = os.environ.get('WORKERS_RESOURCE_PROVIDER', 'false').lower() == 'true'
-    workers_resource_watch = os.environ.get('WORKERS_RESOURCE_WATCH', 'false').lower() == 'true'
-    workers_cleanup = os.environ.get('WORKERS_CLEANUP', 'false').lower() == 'true'
 
     # Redis URL for distributed locking (used by main operator to send tasks)
     redis_url = os.environ.get('REDIS_URL')
@@ -78,8 +58,9 @@ class Poolboy():
     @classmethod
     async def on_startup(cls, logger: kopf.ObjectLogger):
         # Log operator mode on startup
-        logger.info(f"Poolboy starting in {cls.operator_mode} mode")
-        if cls.operator_mode_distributed:
+        mode = "standalone" if cls.is_standalone else "distributed"
+        logger.info(f"Poolboy starting in {mode} mode")
+        if not cls.is_standalone:
             logger.info("Distributed mode: delegating to Celery workers")
 
         if os.path.exists('/run/secrets/kubernetes.io/serviceaccount'):

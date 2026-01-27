@@ -1,3 +1,4 @@
+{{- if or .Values.redis.enabled (eq .Values.operatorMode "distributed") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -54,4 +55,4 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "poolboy.name" . }}-redis-pvc
       {{- end }}
-
+{{- end }}

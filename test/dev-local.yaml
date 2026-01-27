@@ -1,0 +1,19 @@
+# Development environment variables for tests
+# Usage: ansible-playbook playbook.yaml -e @dev-local.yaml
+ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+# Operator namespace (where Poolboy is deployed)
+poolboy_namespace: poolboy-dev
+
+# Test namespace (where test resources are created)
+poolboy_test_namespace: poolboy-dev-test
+
+# Operator domain (CRD API group)
+poolboy_domain: poolboy.gpte.redhat.com
+
+# Service account name
+poolboy_service_account: poolboy
+
+# Cleanup test resources after tests
+poolboy_test_cleanup: true
+

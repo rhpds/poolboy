@@ -11,32 +11,41 @@ logger = get_task_logger(__name__)
 async def _delete_pool_handles(definition: dict) -> dict:
     """Async wrapper for ResourcePool.handle_delete()."""
     import resourcepool
+
     pool = resourcepool.ResourcePool.from_definition(definition)
     await pool.handle_delete(logger=logger)
     return {"status": "completed", "pool": pool.name}
 
 
 async def _maintain_all_pools() -> dict:
-    """List all pools and dispatch manage_pool for each unprocessed."""
+    """List all pools and dispatch manage_pool for each.
+
+    Note: Uses timestamp (truncated to minute) instead of resourceVersion for task_id.
+    This allows periodic reprocessing even when resourceVersion hasn't changed.
+    """
+    import time
+
     from poolboy import Poolboy
+
+    ts_minute = int(time.time() // 60)  # One dispatch allowed per minute per pool
 
     pool_list = await Poolboy.custom_objects_api.list_namespaced_custom_object(
         group=Poolboy.operator_domain,
         namespace=Poolboy.namespace,
-        plural='resourcepools',
+        plural="resourcepools",
         version=Poolboy.operator_version,
     )
 
     dispatched = 0
-    for item in pool_list.get('items', []):
-        uid = item['metadata']['uid']
-        rv = item['metadata']['resourceVersion']
+    for item in pool_list.get("items", []):
+        uid = item["metadata"]["uid"]
         kwargs = {
-            'definition': item,
-            'name': item['metadata']['name'],
-            'namespace': item['metadata']['namespace'],
+            "definition": item,
+            "name": item["metadata"]["name"],
+            "namespace": item["metadata"]["namespace"],
         }
-        manage_pool.apply_async(kwargs=kwargs, task_id=f"pool-{uid}-{rv}")
+        # Use timestamp instead of resourceVersion to allow periodic reprocessing
+        manage_pool.apply_async(kwargs=kwargs, task_id=f"pool-sched-{uid}-{ts_minute}")
         dispatched += 1
 
     return {"dispatched": dispatched}
@@ -45,6 +54,7 @@ async def _maintain_all_pools() -> dict:
 async def _manage_pool(definition: dict) -> dict:
     """Async wrapper for ResourcePool.manage()."""
     import resourcepool
+
     pool = resourcepool.ResourcePool.from_definition(definition)
     await pool.manage(logger=logger)
     return {"status": "completed", "pool": pool.name}
@@ -55,7 +65,7 @@ def delete_pool_handles(self, definition: dict, name: str, namespace: str):
     """Execute ResourcePool.handle_delete() in a worker."""
     from poolboy import Poolboy
 
-    uid = definition['metadata']['uid']
+    uid = definition["metadata"]["uid"]
     lock_key = f"resource_pool:{uid}"
 
     with distributed_lock(lock_key, timeout=60) as acquired:
@@ -68,14 +78,16 @@ def delete_pool_handles(self, definition: dict, name: str, namespace: str):
             return WorkerState.run_async(_delete_pool_handles(definition))
         except Exception as e:
             logger.error(f"Pool {namespace}/{name} delete error: {e}")
-            raise self.retry(exc=e, countdown=Poolboy.workers_error_retry_countdown, max_retries=5)
+            raise self.retry(
+                exc=e, countdown=Poolboy.workers_error_retry_countdown, max_retries=5
+            )
 
 
 def dispatch_delete_pool_handles(definition: dict, name: str, namespace: str):
     """Dispatch delete_pool_handles task with unique task_id."""
-    uid = definition['metadata']['uid']
-    rv = definition['metadata']['resourceVersion']
-    kwargs = {'definition': definition, 'name': name, 'namespace': namespace}
+    uid = definition["metadata"]["uid"]
+    rv = definition["metadata"]["resourceVersion"]
+    kwargs = {"definition": definition, "name": name, "namespace": namespace}
     delete_pool_handles.apply_async(
         kwargs=kwargs,
         task_id=f"pool-delete-{uid}-{rv}",
@@ -84,9 +96,9 @@ def dispatch_delete_pool_handles(definition: dict, name: str, namespace: str):
 
 def dispatch_manage_pool(definition: dict, name: str, namespace: str):
     """Dispatch manage_pool task. Always dispatches for operator events."""
-    uid = definition['metadata']['uid']
-    rv = definition['metadata']['resourceVersion']
-    kwargs = {'definition': definition, 'name': name, 'namespace': namespace}
+    uid = definition["metadata"]["uid"]
+    rv = definition["metadata"]["resourceVersion"]
+    kwargs = {"definition": definition, "name": name, "namespace": namespace}
     manage_pool.apply_async(
         kwargs=kwargs,
         task_id=f"pool-{uid}-{rv}",
@@ -119,7 +131,7 @@ def manage_pool(self, definition: dict, name: str, namespace: str):
     """Execute ResourcePool.manage() in a worker."""
     from poolboy import Poolboy
 
-    uid = definition['metadata']['uid']
+    uid = definition["metadata"]["uid"]
     lock_key = f"resource_pool:{uid}"
 
     with distributed_lock(lock_key, timeout=60) as acquired:
@@ -133,4 +145,6 @@ def manage_pool(self, definition: dict, name: str, namespace: str):
             return result
         except Exception as e:
             logger.error(f"Pool {namespace}/{name} error: {e}")
-            raise self.retry(exc=e, countdown=Poolboy.workers_error_retry_countdown, max_retries=5)
+            raise self.retry(
+                exc=e, countdown=Poolboy.workers_error_retry_countdown, max_retries=5
+            )

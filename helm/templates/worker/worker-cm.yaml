@@ -18,9 +18,15 @@ data:
   CELERY_{{ $key | upper }}: {{ $value | quote }}
   {{- end }}
   # Partition configuration (from useWorkers)
-  {{- range $name, $config := .Values.useWorkers }}
-  {{- if and (kindIs "map" $config) $config.enabled $config.partitions }}
-  PARTITION_{{ $name | snakecase | upper }}: {{ $config.partitions | quote }}
+  {{- with .Values.useWorkers.partitions }}
+  {{- if .resourcePool }}
+  PARTITION_RESOURCE_POOL: {{ .resourcePool | quote }}
+  {{- end }}
+  {{- if .resourceHandle }}
+  PARTITION_RESOURCE_HANDLE: {{ .resourceHandle | quote }}
+  {{- end }}
+  {{- if .resourceClaim }}
+  PARTITION_RESOURCE_CLAIM: {{ .resourceClaim | quote }}
   {{- end }}
   {{- end }}
   # Operator configuration

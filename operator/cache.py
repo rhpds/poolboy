@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 class CacheTag(Enum):
     """Tags for cache key namespacing."""
+
     CLAIM = "claim"
     HANDLE = "handle"
     HANDLE_BOUND = "handle_bound"
@@ -161,7 +162,7 @@ class RedisBackend:
     def set(self, key: str, value: Any, ttl: int) -> None:
         """Set value with TTL in seconds. Serializes using 'definition' property if available."""
         try:
-            if hasattr(value, 'definition'):
+            if hasattr(value, "definition"):
                 data = json.dumps(value.definition)
             else:
                 data = json.dumps(value)
@@ -223,7 +224,7 @@ class CacheManager:
         pattern = f"poolboy:{tag.value}:*"
         prefix = f"poolboy:{tag.value}:"
         keys = cls._backend.keys(pattern)
-        return [k[len(prefix):] for k in keys]
+        return [k[len(prefix) :] for k in keys]
 
     @classmethod
     def initialize(cls, standalone: Optional[bool] = None) -> None:
@@ -231,13 +232,13 @@ class CacheManager:
         Initialize the cache backend.
 
         Args:
-            standalone: Force standalone mode. If None, uses Poolboy.operator_mode_standalone.
+            standalone: Force standalone mode. If None, uses Poolboy.is_standalone.
         """
         if cls._initialized:
             return
 
         if standalone is None:
-            standalone = Poolboy.operator_mode_standalone
+            standalone = Poolboy.is_standalone
 
         if standalone:
             logger.info("Cache: Using MemoryBackend (standalone mode)")
@@ -248,7 +249,9 @@ class CacheManager:
             try:
                 cls._backend = RedisBackend(redis_url)
             except Exception as e:
-                logger.warning(f"Redis connection failed, falling back to MemoryBackend: {e}")
+                logger.warning(
+                    f"Redis connection failed, falling back to MemoryBackend: {e}"
+                )
                 cls._backend = MemoryBackend()
 
         cls._initialized = True

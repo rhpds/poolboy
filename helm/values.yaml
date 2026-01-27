@@ -24,9 +24,6 @@ operatorDomain:
 # Backward compatibility: 'all-in-one' maps to 'standalone', 'manager' maps to 'distributed'
 operatorMode: distributed
 
-manageClaimsInterval: 60
-manageHandlesInterval: 60
-managePoolsInterval: 10
 resourceRefreshInterval: 600
 
 anarchy:
@@ -107,30 +104,12 @@ useWorkers:
   # After 5 retries, the task fails permanently.
   errorRetryCountdown: 30
 
-  resourcePool:
-    enabled: false
-    # Operation mode for periodic tasks: daemon, scheduler, or both
-    daemonMode: "scheduler"
-    partitions: 2
-  resourceHandle:
-    enabled: false
-    # Operation mode for periodic tasks: daemon, scheduler, or both
-    daemonMode: "scheduler"
-    partitions: 4
-  resourceClaim:
-    enabled: false
-    # Operation mode for periodic tasks: daemon, scheduler, or both
-    daemonMode: "scheduler"
-    partitions: 4
-  resourceProvider:
-    enabled: false
-    partitions: 2
-  resourceWatch:
-    enabled: false
-    partitions: 2
-  cleanup:
-    enabled: false
-    partitions: 4
+  # Partitions for Celery queue routing (load distribution across workers)
+  # Higher values = more parallelism but more queues to manage
+  partitions:
+    resourcePool: 2
+    resourceHandle: 4
+    resourceClaim: 4
 
 # ===========================================
 # Redis Configuration
@@ -277,20 +256,21 @@ flower:
 # ===========================================
 # Task Schedules
 # Supports: seconds (interval) or cron (expression)
+# With ClaimWatch/HandleWatch, these are now safety nets (not primary)
 # ===========================================
 schedules:
   maintain-all-pools:
     enabled: false
     schedule:
-      seconds: 30
+      seconds: 30  # No PoolWatch yet, keep frequent
   maintain-all-handles:
     enabled: false
     schedule:
-      seconds: 60
+      seconds: 60  # Needs polling for lifespan.end triggers
   maintain-all-claims:
     enabled: false
     schedule:
-      seconds: 60
+      seconds: 60  # Same as old daemon interval
   cleanup-stale-handles:
     enabled: false
     schedule:

@@ -3,8 +3,8 @@
 
 clusterDomain: apps-crc.testing
 
-# Use distributed mode with Celery workers for development
-operatorMode: distributed
+# Use standalone mode for testing watches without Celery overhead
+operatorMode: standalone
 
 namespace:
   name: poolboy-dev
@@ -45,36 +45,29 @@ flower:
     enabled: true
 
 # ===========================================
-# Feature Flags - Enable Celery Workers
+# Worker Settings (simplified)
 # ===========================================
 useWorkers:
-  resourcePool:
-    enabled: true
-    daemonMode: "scheduler"
-    partitions: 2
-  resourceHandle:
-    enabled: true
-    daemonMode: "scheduler"
-    partitions: 4
-  resourceClaim:
-    enabled: true
-    daemonMode: "scheduler"
-    partitions: 4
+  lockRetryCountdown: 3
+  errorRetryCountdown: 30
+  partitions:
+    resourcePool: 2
+    resourceHandle: 4
+    resourceClaim: 4
 
 # ===========================================
-# Scheduled Tasks
+# Scheduled Tasks (safety net - watches handle real-time events)
 # ===========================================
 schedules:
   maintain-all-pools:
     enabled: true
     schedule:
-      seconds: 30
+      seconds: 30  # No PoolWatch yet, keep frequent
   maintain-all-handles:
     enabled: true
     schedule:
-      seconds: 60
+      seconds: 60  # Needs polling for lifespan.end triggers
   maintain-all-claims:
     enabled: true
     schedule:
-      seconds: 60
-
+      seconds: 60  # Same as old daemon interval

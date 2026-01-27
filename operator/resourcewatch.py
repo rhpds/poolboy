@@ -14,16 +14,20 @@ from cache import Cache, CacheTag
 from kopfobject import KopfObject
 from poolboy import Poolboy
 
-logger = logging.getLogger('resource_watch')
+logger = logging.getLogger("resource_watch")
+
 
 class ResourceWatchFailedError(Exception):
     pass
 
+
 class ResourceWatchRestartError(Exception):
     pass
 
-ResourceHandleT = TypeVar('ResourceHandleT', bound='ResourceHandle')
-ResourceWatchT = TypeVar('ResourceWatchT', bound='ResourceWatch')
+
+ResourceHandleT = TypeVar("ResourceHandleT", bound="ResourceHandle")
+ResourceWatchT = TypeVar("ResourceWatchT", bound="ResourceWatch")
+
 
 class ResourceWatch(KopfObject):
     api_group = Poolboy.operator_domain
@@ -34,66 +38,77 @@ class ResourceWatch(KopfObject):
     class_lock = asyncio.Lock()
 
     @classmethod
-    def __instance_key(cls, api_version: str, kind: str, namespace: str|None) -> str:
+    def __instance_key(cls, api_version: str, kind: str, namespace: str | None) -> str:
         """Return cache key used to identify ResourceWatch in instances dict"""
-        return "|".join((api_version, kind, namespace or '*'))
+        return "|".join((api_version, kind, namespace or "*"))
 
     @classmethod
-    def __make_name(cls,
+    def __make_name(
+        cls,
         api_version: str,
         kind: str,
-        namespace: str|None,
+        namespace: str | None,
     ):
         """Return unique name for ResourceWatch determined by watch target.
         This hash prevents race conditions when otherwise multiple watches might be created."""
-        return (namespace or 'cluster') + '-' + urlsafe_b64encode(
-            sha256(':'.join((api_version,kind,namespace or '')).encode('utf-8'))
-            .digest()
-            ).decode('utf-8').replace('=', '').replace('-', '').replace('_', '').lower()[:12]
+        return (
+            (namespace or "cluster")
+            + "-"
+            + urlsafe_b64encode(
+                sha256(
+                    ":".join((api_version, kind, namespace or "")).encode("utf-8")
+                ).digest()
+            )
+            .decode("utf-8")
+            .replace("=", "")
+            .replace("-", "")
+            .replace("_", "")
+            .lower()[:12]
+        )
 
     @classmethod
-    def __get_instance(cls,
+    def __get_instance(
+        cls,
         api_version: str,
         kind: str,
-        namespace: str|None,
+        namespace: str | None,
     ):
         """Return ResourceWatch from cache."""
         instance_key = cls.__instance_key(
-            api_version=api_version,
-            kind=kind,
-            namespace=namespace
+            api_version=api_version, kind=kind, namespace=namespace
         )
         return cls.cache_get(CacheTag.WATCH, instance_key)
 
     @classmethod
     def __register_definition(cls, definition: Mapping) -> ResourceWatchT:
         resource_watch = cls.__get_instance(
-            api_version=definition['spec']['apiVersion'],
-            kind=definition['spec']['kind'],
-            namespace=definition['spec'].get('namespace'),
+            api_version=definition["spec"]["apiVersion"],
+            kind=definition["spec"]["kind"],
+            namespace=definition["spec"].get("namespace"),
         )
         if resource_watch:
             resource_watch.refresh_from_definition(definition=definition)
         else:
             resource_watch = cls(
-                annotations=definition['metadata'].get('annotations', {}),
-                labels=definition['metadata'].get('labels', {}),
-                meta=definition['metadata'],
-                name=definition['metadata']['name'],
+                annotations=definition["metadata"].get("annotations", {}),
+                labels=definition["metadata"].get("labels", {}),
+                meta=definition["metadata"],
+                name=definition["metadata"]["name"],
                 namespace=Poolboy.namespace,
-                spec=definition['spec'],
-                status=definition.get('status', {}),
-                uid=definition['metadata']['uid'],
+                spec=definition["spec"],
+                status=definition.get("status", {}),
+                uid=definition["metadata"]["uid"],
             )
         resource_watch.__register()
         return resource_watch
 
     @classmethod
-    async def create_as_needed(cls,
+    async def create_as_needed(
+        cls,
         api_version: str,
         kind: str,
-        namespace: str|None,
-    ) -> ResourceWatchT|None:
+        namespace: str | None,
+    ) -> ResourceWatchT | None:
         async with cls.class_lock:
             resource_watch = await cls.__get(
                 api_version=api_version,
@@ -110,7 +125,7 @@ class ResourceWatch(KopfObject):
             )
 
             definition = {
-                "apiVersion": '/'.join((cls.api_group, cls.api_version)),
+                "apiVersion": "/".join((cls.api_group, cls.api_version)),
                 "kind": cls.kind,
                 "metadata": {
                     "name": name,
@@ -118,18 +133,20 @@ class ResourceWatch(KopfObject):
                 "spec": {
                     "apiVersion": api_version,
                     "kind": kind,
-                }
+                },
             }
             if namespace:
-                definition['spec']['namespace'] = namespace
+                definition["spec"]["namespace"] = namespace
 
             try:
-                definition = await Poolboy.custom_objects_api.create_namespaced_custom_object(
-                    group = cls.api_group,
-                    namespace = Poolboy.namespace,
-                    plural = cls.plural,
-                    version = cls.api_version,
-                    body = definition,
+                definition = (
+                    await Poolboy.custom_objects_api.create_namespaced_custom_object(
+                        group=cls.api_group,
+                        namespace=Poolboy.namespace,
+                        plural=cls.plural,
+                        version=cls.api_version,
+                        body=definition,
+                    )
                 )
                 resource_watch = cls.from_definition(definition)
                 logger.info(f"Created {resource_watch}")
@@ -142,10 +159,11 @@ class ResourceWatch(KopfObject):
                     raise
 
     @classmethod
-    async def get(cls,
+    async def get(
+        cls,
         api_version: str,
         kind: str,
-        namespace: str|None,
+        namespace: str | None,
     ) -> ResourceWatchT:
         """Get ResourceWatch by watched resources"""
         async with cls.class_lock:
@@ -156,10 +174,11 @@ class ResourceWatch(KopfObject):
             )
 
     @classmethod
-    async def __get(cls,
+    async def __get(
+        cls,
         api_version: str,
         kind: str,
-        namespace: str|None,
+        namespace: str | None,
     ) -> ResourceWatchT:
         resource_watch = cls.__get_instance(
             api_version=api_version,
@@ -177,11 +196,11 @@ class ResourceWatch(KopfObject):
 
         try:
             list_object = await Poolboy.custom_objects_api.get_namespaced_custom_object(
-                group = cls.api_group,
-                name = name,
-                namespace = Poolboy.namespace,
-                plural = cls.plural,
-                version = cls.api_version,
+                group=cls.api_group,
+                name=name,
+                namespace=Poolboy.namespace,
+                plural=cls.plural,
+                version=cls.api_version,
             )
         except kubernetes_asyncio.client.exceptions.ApiException as exception:
             if exception.status == 404:
@@ -190,14 +209,15 @@ class ResourceWatch(KopfObject):
                 raise
 
     @classmethod
-    async def get_resource_from_any(cls,
+    async def get_resource_from_any(
+        cls,
         api_version: str,
         kind: str,
         name: str,
-        namespace: str|None,
-        not_found_okay: bool=False,
-        use_cache: bool=True,
-    ) -> Mapping|None:
+        namespace: str | None,
+        not_found_okay: bool = False,
+        use_cache: bool = True,
+    ) -> Mapping | None:
         # Try to get from other watch object
         watch = cls.__get_instance(
             api_version=api_version,
@@ -237,29 +257,29 @@ class ResourceWatch(KopfObject):
     ) -> ResourceWatchT:
         async with cls.class_lock:
             resource_watch = cls.__get_instance(
-                api_version=spec['apiVersion'],
-                kind=spec['kind'],
-                namespace=spec.get('namespace')
+                api_version=spec["apiVersion"],
+                kind=spec["kind"],
+                namespace=spec.get("namespace"),
             )
             if resource_watch:
                 resource_watch.refresh(
-                    annotations = annotations,
-                    labels = labels,
-                    meta = meta,
-                    spec = spec,
-                    status = status,
-                    uid = uid,
+                    annotations=annotations,
+                    labels=labels,
+                    meta=meta,
+                    spec=spec,
+                    status=status,
+                    uid=uid,
                 )
             else:
                 resource_watch = cls(
-                    annotations = annotations,
-                    labels = labels,
-                    meta = meta,
-                    name = name,
-                    namespace = namespace,
-                    spec = spec,
-                    status = status,
-                    uid = uid,
+                    annotations=annotations,
+                    labels=labels,
+                    meta=meta,
+                    name=name,
+                    namespace=namespace,
+                    spec=spec,
+                    status=status,
+                    uid=uid,
                 )
                 resource_watch.__register()
             return resource_watch
@@ -277,14 +297,15 @@ class ResourceWatch(KopfObject):
             if tasks:
                 await asyncio.gather(*tasks)
 
-    def __init__(self,
-        annotations: kopf.Annotations|Mapping,
-        labels: kopf.Labels|Mapping,
-        meta: kopf.Meta|Mapping,
+    def __init__(
+        self,
+        annotations: kopf.Annotations | Mapping,
+        labels: kopf.Labels | Mapping,
+        meta: kopf.Meta | Mapping,
         name: str,
         namespace: str,
-        spec: kopf.Spec|Mapping,
-        status: kopf.Status|Mapping,
+        spec: kopf.Spec | Mapping,
+        status: kopf.Status | Mapping,
         uid: str,
     ):
         super().__init__(
@@ -309,8 +330,8 @@ class ResourceWatch(KopfObject):
     def __str__(self) -> str:
         return (
             f"{self.kind} {self.name} ({self.watch_api_version} {self.watch_kind} in {self.watch_namespace})"
-            if self.watch_namespace else
-            f"{self.kind} {self.name} ({self.watch_api_version} {self.watch_kind})"
+            if self.watch_namespace
+            else f"{self.kind} {self.name} ({self.watch_api_version} {self.watch_kind})"
         )
 
     def __self_instance_key(self) -> str:
@@ -322,29 +343,30 @@ class ResourceWatch(KopfObject):
 
     @property
     def name_hash(self) -> str:
-        return self.name.rsplit('-', 1)[1]
+        return self.name.rsplit("-", 1)[1]
 
     @property
     def watch_api_version(self) -> str:
-        return self.spec['apiVersion']
+        return self.spec["apiVersion"]
 
     @property
     def watch_kind(self) -> str:
-        return self.spec['kind']
+        return self.spec["kind"]
 
     @property
-    def watch_namespace(self) -> str|None:
-        return self.spec.get('namespace')
+    def watch_namespace(self) -> str | None:
+        return self.spec.get("namespace")
 
     def __resource_cache_key(self, name: str) -> str:
         """Build unique cache key for a watched resource."""
         return f"{self.name}:{name}"
 
-    async def get_resource(self,
+    async def get_resource(
+        self,
         name: str,
-        not_found_okay: bool=False,
-        use_cache: bool=True,
-    ) -> Mapping|None:
+        not_found_okay: bool = False,
+        use_cache: bool = True,
+    ) -> Mapping | None:
         resource_cache_key = self.__resource_cache_key(name)
         if use_cache:
             cached = Cache.get(CacheTag.WATCH_RESOURCE, resource_cache_key)
@@ -363,7 +385,12 @@ class ResourceWatch(KopfObject):
             else:
                 raise
         if use_cache and resource:
-            Cache.set(CacheTag.WATCH_RESOURCE, resource_cache_key, resource, ttl=Poolboy.resource_refresh_interval)
+            Cache.set(
+                CacheTag.WATCH_RESOURCE,
+                resource_cache_key,
+                resource,
+                ttl=Poolboy.resource_refresh_interval,
+            )
         return resource
 
     async def start(self, logger) -> None:
@@ -372,23 +399,27 @@ class ResourceWatch(KopfObject):
 
     async def watch(self):
         try:
-            if '/' in self.watch_api_version:
-                group, version = self.watch_api_version.split('/')
-                plural = await poolboy_k8s.kind_to_plural(group=group, version=version, kind=self.watch_kind)
+            if "/" in self.watch_api_version:
+                group, version = self.watch_api_version.split("/")
+                plural = await poolboy_k8s.kind_to_plural(
+                    group=group, version=version, kind=self.watch_kind
+                )
                 kwargs = {"group": group, "plural": plural, "version": version}
                 if self.watch_namespace:
                     method = Poolboy.custom_objects_api.list_namespaced_custom_object
-                    kwargs['namespace'] = self.watch_namespace
+                    kwargs["namespace"] = self.watch_namespace
                 else:
                     method = Poolboy.custom_objects_api.list_cluster_custom_object
             elif self.watch_namespace:
                 method = getattr(
-                    Poolboy.core_v1_api, "list_namespaced_" + inflection.underscore(self.watch_kind)
+                    Poolboy.core_v1_api,
+                    "list_namespaced_" + inflection.underscore(self.watch_kind),
                 )
                 kwargs = {"namespace": self.watch_namespace}
             else:
                 method = getattr(
-                    Poolboy.core_v1_api, "list_" + inflection.underscore(self.watch_kind)
+                    Poolboy.core_v1_api,
+                    "list_" + inflection.underscore(self.watch_kind),
                 )
                 kwargs = {}
 
@@ -401,17 +432,23 @@ class ResourceWatch(KopfObject):
                     return
                 except ResourceWatchRestartError as e:
                     logger.debug(f"{self} restart: {e}")
-                    watch_duration = (datetime.now(timezone.utc) - watch_start_dt).total_seconds()
+                    watch_duration = (
+                        datetime.now(timezone.utc) - watch_start_dt
+                    ).total_seconds()
                     if watch_duration < 10:
                         await asyncio.sleep(10 - watch_duration)
                 except ResourceWatchFailedError as e:
                     logger.warning(f"{self} failed: {e}")
-                    watch_duration = (datetime.now(timezone.utc) - watch_start_dt).total_seconds()
+                    watch_duration = (
+                        datetime.now(timezone.utc) - watch_start_dt
+                    ).total_seconds()
                     if watch_duration < 60:
                         await asyncio.sleep(60 - watch_duration)
                 except Exception:
                     logger.exception(f"{self} exception")
-                    watch_duration = (datetime.now(timezone.utc) - watch_start_dt).total_seconds()
+                    watch_duration = (
+                        datetime.now(timezone.utc) - watch_start_dt
+                    ).total_seconds()
                     if watch_duration < 60:
                         await asyncio.sleep(60 - watch_duration)
                 logger.debug(f"Restarting {self}")
@@ -427,16 +464,18 @@ class ResourceWatch(KopfObject):
                 if not isinstance(event, Mapping):
                     raise ResourceWatchFailedError(f"UNKNOWN EVENT: {event}")
 
-                event_obj = event['object']
-                event_type = event['type']
+                event_obj = event["object"]
+                event_type = event["type"]
                 if not isinstance(event_obj, Mapping):
                     event_obj = Poolboy.api_client.sanitize_for_serialization(event_obj)
-                if event_type == 'ERROR':
-                    if event_obj['kind'] == 'Status':
-                        if event_obj['reason'] in ('Expired', 'Gone'):
-                            raise ResourceWatchRestartError(event_obj['reason'].lower())
+                if event_type == "ERROR":
+                    if event_obj["kind"] == "Status":
+                        if event_obj["reason"] in ("Expired", "Gone"):
+                            raise ResourceWatchRestartError(event_obj["reason"].lower())
                         else:
-                            raise ResourceWatchFailedError(f"{event_obj['reason']} {event_obj['message']}")
+                            raise ResourceWatchFailedError(
+                                f"{event_obj['reason']} {event_obj['message']}"
+                            )
                     else:
                         raise ResourceWatchFailedError(f"UNKNOWN EVENT: {event}")
                 try:
@@ -453,39 +492,53 @@ class ResourceWatch(KopfObject):
                 await watch.close()
 
     async def __watch_event(self, event_type, event_obj):
-        event_obj_annotations = event_obj['metadata'].get('annotations')
+        event_obj_annotations = event_obj["metadata"].get("annotations")
         if not event_obj_annotations:
             return
-        if event_obj_annotations.get(Poolboy.resource_handle_deleted_annotation) is not None:
+        if (
+            event_obj_annotations.get(Poolboy.resource_handle_deleted_annotation)
+            is not None
+        ):
             return
 
-        resource_handle_name = event_obj_annotations.get(Poolboy.resource_handle_name_annotation)
-        resource_index = int(event_obj_annotations.get(Poolboy.resource_index_annotation, 0))
-        resource_name = event_obj['metadata']['name']
-        resource_namespace = event_obj['metadata'].get('namespace')
+        resource_handle_name = event_obj_annotations.get(
+            Poolboy.resource_handle_name_annotation
+        )
+        resource_index = int(
+            event_obj_annotations.get(Poolboy.resource_index_annotation, 0)
+        )
+        resource_name = event_obj["metadata"]["name"]
+        resource_namespace = event_obj["metadata"].get("namespace")
         resource_description = (
             f"{event_obj['apiVersion']} {event_obj['kind']} {resource_name} in {resource_namespace}"
-            if resource_namespace else
-            f"{event_obj['apiVersion']} {event_obj['kind']} {resource_name}"
+            if resource_namespace
+            else f"{event_obj['apiVersion']} {event_obj['kind']} {resource_name}"
         )
 
         if not resource_handle_name:
             return
 
         resource_cache_key = self.__resource_cache_key(resource_name)
-        if event_type == 'DELETED':
+        if event_type == "DELETED":
             Cache.delete(CacheTag.WATCH_RESOURCE, resource_cache_key)
         else:
-            Cache.set(CacheTag.WATCH_RESOURCE, resource_cache_key, event_obj, ttl=Poolboy.resource_refresh_interval)
+            Cache.set(
+                CacheTag.WATCH_RESOURCE,
+                resource_cache_key,
+                event_obj,
+                ttl=Poolboy.resource_refresh_interval,
+            )
 
         try:
             resource_handle = await resourcehandle.ResourceHandle.get(
                 name=resource_handle_name,
-                use_cache=Poolboy.operator_mode_standalone,
+                use_cache=Poolboy.is_standalone,
             )
         except kubernetes_asyncio.client.exceptions.ApiException as exception:
             if exception.status == 404:
-                logger.warning(f"ResourceHandle {resource_handle_name} not found for event on {resource_description}")
+                logger.warning(
+                    f"ResourceHandle {resource_handle_name} not found for event on {resource_description}"
+                )
             else:
                 logger.exception(
                     f"Failed to get ResourceHandle {resource_handle_name} for event on {resource_description}"
@@ -505,30 +558,30 @@ class ResourceWatch(KopfObject):
 
         # Get full list of resources to update ResourceHandle status
         resource_states = []
-        for (idx, resource) in enumerate(resource_handle.status_resources):
+        for idx, resource in enumerate(resource_handle.status_resources):
             if idx == resource_index:
                 resource_states.append(event_obj)
                 continue
-            reference = resource.get('reference')
+            reference = resource.get("reference")
             if reference:
-                if(
-                    reference['apiVersion'] == self.watch_api_version and
-                    reference['kind'] == self.watch_kind and
-                    reference.get('namespace') == self.watch_namespace
+                if (
+                    reference["apiVersion"] == self.watch_api_version
+                    and reference["kind"] == self.watch_kind
+                    and reference.get("namespace") == self.watch_namespace
                 ):
                     resource_states.append(
                         await self.get_resource(
-                            name=reference['name'],
+                            name=reference["name"],
                             not_found_okay=True,
                         )
                     )
                 else:
                     resource_states.append(
                         await self.get_resource_from_any(
-                            api_version=reference['apiVersion'],
-                            kind=reference['kind'],
-                            name=reference['name'],
-                            namespace=reference.get('namespace'),
+                            api_version=reference["apiVersion"],
+                            kind=reference["kind"],
+                            name=reference["name"],
+                            namespace=reference.get("namespace"),
                             not_found_okay=True,
                         )
                     )

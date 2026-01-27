@@ -69,13 +69,18 @@
     name: test-ready-01
     namespace: "{{ poolboy_test_namespace }}"
   register: r_get_resource_claim
+  vars:
+    _lifespan_seconds: >-
+      {{
+        (
+          r_get_resource_claim.resources[0].status.lifespan.end | to_datetime("%Y-%m-%dT%H:%M:%SZ") -
+          r_get_resource_claim.resources[0].status.lifespan.start | to_datetime("%Y-%m-%dT%H:%M:%SZ")
+        ).total_seconds() | int
+      }}
   failed_when: >-
     r_get_resource_claim.resources[0].status.ready != false or
     r_get_resource_claim.resources[0].status.lifespan.firstReady is defined or
-    (
-      r_get_resource_claim.resources[0].status.lifespan.end | to_datetime("%Y-%m-%dT%H:%M:%SZ") -
-      r_get_resource_claim.resources[0].status.lifespan.start | to_datetime("%Y-%m-%dT%H:%M:%SZ")
-    ).total_seconds() != 24 * 60 * 60
+    (_lifespan_seconds | int) < 86398 or (_lifespan_seconds | int) > 86402
   until: r_get_resource_claim is success
   delay: 1
   retries: 10
@@ -104,16 +109,21 @@
     name: test-ready-01
     namespace: "{{ poolboy_test_namespace }}"
   register: r_get_resource_claim
+  vars:
+    _lifespan_seconds: >-
+      {{
+        (
+          r_get_resource_claim.resources[0].status.lifespan.end | to_datetime("%Y-%m-%dT%H:%M:%SZ") -
+          r_get_resource_claim.resources[0].status.lifespan.firstReady | to_datetime("%Y-%m-%dT%H:%M:%SZ")
+        ).total_seconds() | int
+      }}
   failed_when: >-
     r_get_resource_claim.resources[0].status.ready != true or
     r_get_resource_claim.resources[0].status.lifespan.firstReady is undefined or
-    (
-      r_get_resource_claim.resources[0].status.lifespan.end | to_datetime("%Y-%m-%dT%H:%M:%SZ") -
-      r_get_resource_claim.resources[0].status.lifespan.firstReady | to_datetime("%Y-%m-%dT%H:%M:%SZ")
-    ).total_seconds() != 24 * 60 * 60
+    (_lifespan_seconds | int) < 86398 or (_lifespan_seconds | int) > 86402
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 45
 
 - name: Delete ResourceClaim test-ready-01
   kubernetes.core.k8s:

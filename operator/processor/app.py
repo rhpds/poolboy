@@ -25,12 +25,13 @@ from metrics import TimerDecoratorMeta
 from .config import WorkerConfig
 
 logger = get_task_logger(__name__)
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # =============================================================================
 # TaskRouter - Convention-based routing
 # =============================================================================
+
 
 class TaskRouter:
     """
@@ -57,8 +58,9 @@ class TaskRouter:
         - (not set) -> no partitioning, uses simple queue name
     """
 
-    def __call__(self, name: str, args: tuple, kwargs: dict, options: dict,
-                 task=None, **kw) -> dict | None:
+    def __call__(
+        self, name: str, args: tuple, kwargs: dict, options: dict, task=None, **kw
+    ) -> dict | None:
         """Make router callable for Celery's task_routes."""
         return self.route(name, kwargs)
 
@@ -71,7 +73,7 @@ class TaskRouter:
             resourceclaim -> claim
             cleanup -> cleanup
         """
-        if module.startswith('resource') and len(module) > 8:
+        if module.startswith("resource") and len(module) > 8:
             return module[8:]  # resourcepool -> pool
         return module
 
@@ -81,10 +83,12 @@ class TaskRouter:
         value = os.environ.get(env_key)
         return int(value) if value else 0
 
-    def get_queue_name(self, resource_type: str, resource_name: str,
-                       namespace: str, partitions: int) -> str:
+    def get_queue_name(
+        self, resource_type: str, resource_name: str, namespace: str, partitions: int
+    ) -> str:
         """Calculate partitioned queue name using consistent hashing."""
         import hashlib
+
         resource_key = f"{namespace}/{resource_name}"
         hash_value = int(hashlib.md5(resource_key.encode()).hexdigest(), 16)
         partition_index = hash_value % partitions
@@ -99,14 +103,14 @@ class TaskRouter:
             resourceclaim -> resource_claim
             cleanup -> cleanup
         """
-        if module.startswith('resource') and len(module) > 8:
+        if module.startswith("resource") and len(module) > 8:
             return f"resource_{module[8:]}"
         return module
 
     def parse_task_name(self, name: str) -> tuple[str, str] | None:
         """Parse task name to extract module."""
-        parts = name.split('.')
-        if len(parts) >= 3 and parts[0] == 'tasks':
+        parts = name.split(".")
+        if len(parts) >= 3 and parts[0] == "tasks":
             return parts[1], parts[2]
         return None
 
@@ -122,22 +126,24 @@ class TaskRouter:
 
         # No partitioning configured - use default queue
         if not partitions:
-            return {'queue': 'default'}
+            return {"queue": "default"}
 
         # Get resource identifier from kwargs using convention
         # Fallback to generic 'name' and 'namespace' if entity-specific not found
         entity = self.get_entity_from_module(module)
-        resource_name = kwargs.get(f'{entity}_name') or kwargs.get('name')
-        namespace = kwargs.get(f'{entity}_namespace') or kwargs.get('namespace', 'default')
+        resource_name = kwargs.get(f"{entity}_name") or kwargs.get("name")
+        namespace = kwargs.get(f"{entity}_namespace") or kwargs.get(
+            "namespace", "default"
+        )
 
         if resource_name:
             queue = self.get_queue_name(
                 resource_type, resource_name, namespace, partitions
             )
-            return {'queue': queue}
+            return {"queue": queue}
 
         # No resource identifier - use default queue
-        return {'queue': 'default'}
+        return {"queue": "default"}
 
 
 # =============================================================================
@@ -172,10 +178,12 @@ class WorkerState:
 
         # Cleanup distributed lock Redis client
         from distributed_lock import DistributedLock
+
         DistributedLock.on_cleanup()
 
         if cls.loop and not cls.loop.is_closed():
             from poolboy import Poolboy
+
             cls.loop.run_until_complete(Poolboy.on_cleanup())
             cls.loop.close()
             log.info("Worker state cleaned up")
@@ -190,12 +198,14 @@ class WorkerState:
 
         # Initialize distributed lock Redis client
         from distributed_lock import DistributedLock
+
         DistributedLock.on_startup()
 
         cls.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(cls.loop)
 
         from poolboy import Poolboy
+
         cls.loop.run_until_complete(Poolboy.on_startup(logger=log))
         cls.k8s_initialized = True
         cls.initialized_at = time.time()
@@ -204,6 +214,7 @@ class WorkerState:
     def _is_connection_stale(cls) -> bool:
         """Check if connection has exceeded max age."""
         import time
+
         if cls.initialized_at == 0:
             return True
         elapsed = time.time() - cls.initialized_at
@@ -212,11 +223,7 @@ class WorkerState:
     @classmethod
     def _ensure_initialized(cls):
         """Ensure connection is initialized and fresh (lazy init + max age)."""
-        not_ready = (
-            not cls.k8s_initialized or
-            cls.loop is None or
-            cls.loop.is_closed()
-        )
+        not_ready = not cls.k8s_initialized or cls.loop is None or cls.loop.is_closed()
         if not_ready:
             logger.warning("WorkerState not initialized, lazy init...")
             cls.initialize(logger)
@@ -249,28 +256,9 @@ class WorkerState:
 
 
 # =============================================================================
-# Helper functions
-# =============================================================================
-
-def is_worker_enabled(resource_type: str) -> bool:
-    """
-    Check if workers are enabled for a specific resource type.
-
-    Used by the operator to decide whether to dispatch tasks to workers.
-
-    Args:
-        resource_type: Type of resource (e.g., 'resource_pool')
-
-    Returns:
-        True if workers are enabled for this resource type.
-    """
-    env_key = f"WORKERS_{resource_type.upper()}"
-    return os.environ.get(env_key, 'false').lower() == 'true'
-
-
-# =============================================================================
 # WorkerApp
 # =============================================================================
+
 
 class WorkerApp(metaclass=TimerDecoratorMeta):
     """
@@ -292,7 +280,7 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
         """
         self.config = config or WorkerConfig()
         self.router = TaskRouter()
-        self.app = Celery('poolboy')
+        self.app = Celery("poolboy")
 
         self._configure_app()
         self._configure_queues()
@@ -307,18 +295,18 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
         """Configure task queues and routing."""
         queue_names = self._get_all_queues()
         self.app.conf.task_queues = [Queue(q) for q in queue_names]
-        self.app.conf.task_default_queue = 'default'
+        self.app.conf.task_default_queue = "default"
         self.app.conf.task_routes = (self.router,)
 
     def _get_all_queues(self) -> list[str]:
         """Generate queue names (default + partitioned)."""
-        queues = ['default']
+        queues = ["default"]
 
         # Partitioned queues (e.g., 'resource_pool_0', 'resource_pool_1')
         config = self._get_partition_config()
         for resource_type, partition_count in config.items():
             for i in range(partition_count):
-                queues.append(f'{resource_type}_{i}')
+                queues.append(f"{resource_type}_{i}")
 
         return queues
 
@@ -327,8 +315,12 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
     def _get_partition_config() -> dict[str, int]:
         """Get partition configuration from environment variables."""
         resource_types = [
-            'cleanup', 'resource_claim', 'resource_handle',
-            'resource_pool', 'resource_provider', 'resource_watch',
+            "cleanup",
+            "resource_claim",
+            "resource_handle",
+            "resource_pool",
+            "resource_provider",
+            "resource_watch",
         ]
         config = {}
         for resource_type in resource_types:
@@ -351,12 +343,12 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
     @staticmethod
     def _on_worker_init(**kwargs):
         """Initialize metrics server when main worker process starts."""
-        if os.environ.get('WORKER_METRICS_ENABLED', 'true').lower() != 'true':
+        if os.environ.get("WORKER_METRICS_ENABLED", "true").lower() != "true":
             return
 
         from metrics import MetricsService
 
-        port = int(os.environ.get('WORKER_METRICS_PORT', '9090'))
+        port = int(os.environ.get("WORKER_METRICS_PORT", "9090"))
         MetricsService.start(port=port)
         logger.info(f"Worker metrics server started on port {port}")
 
@@ -373,6 +365,7 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
     def _on_worker_process_init(**kwargs):
         """Initialize event loop and K8s client when worker process starts."""
         from cache import Cache
+
         Cache.initialize(standalone=False)
         WorkerState.initialize(logger)
 
@@ -395,7 +388,7 @@ class WorkerApp(metaclass=TimerDecoratorMeta):
 
     def _setup_autodiscover(self):
         """Configure task autodiscovery."""
-        self.app.autodiscover_tasks(['tasks'])
+        self.app.autodiscover_tasks(["tasks"])
 
 
 # =============================================================================
@@ -411,6 +404,7 @@ app = worker_app.app
 # Beat Schedule Setup (after all tasks are discovered)
 # =============================================================================
 
+
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     """
@@ -419,8 +413,8 @@ def setup_periodic_tasks(sender, **kwargs):
     This runs after all tasks have been discovered and registered,
     avoiding circular import issues.
     """
-    enabled = os.environ.get('CELERY_SCHEDULER_ENABLED', 'false')
-    if enabled.lower() != 'true':
+    enabled = os.environ.get("CELERY_SCHEDULER_ENABLED", "false")
+    if enabled.lower() != "true":
         return
 
     # Import tasks to trigger @register_schedule decorators

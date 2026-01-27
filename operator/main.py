@@ -47,7 +47,7 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     # Configure logging
     configure_kopf_logging()
     # Initialize cache before any preload operations
-    Cache.initialize(standalone=Poolboy.operator_mode_standalone)
+    Cache.initialize(standalone=Poolboy.is_standalone)
 
     await Poolboy.on_startup(logger=logger)
 
@@ -59,7 +59,7 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     await ResourceProvider.preload(logger=logger)
 
     # Preload ResourceHandles in standalone mode (distributed mode uses workers)
-    if Poolboy.operator_mode_standalone:
+    if Poolboy.is_standalone:
         await ResourceHandle.preload(logger=logger)
 
 @kopf.on.cleanup()
@@ -123,7 +123,7 @@ async def resource_claim_event(
     # IMPORTANT: Only dispatch to worker if claim already has a handle.
     # Initial binding requires in-memory cache which workers don't have.
     # This ensures pool handles are correctly reused.
-    if Poolboy.workers_resource_claim and resource_claim.has_resource_handle:
+    if not Poolboy.is_standalone and resource_claim.has_resource_handle:
         from tasks.resourceclaim import dispatch_manage_claim
         dispatch_manage_claim(
             definition=resource_claim.definition,
@@ -160,18 +160,18 @@ async def resource_claim_delete(
         uid = uid,
     )
 
-    # Delegate to worker if enabled
-    if Poolboy.workers_resource_claim:
+    # Delegate to worker if not standalone
+    if not Poolboy.is_standalone:
         from tasks.resourceclaim import dispatch_delete_claim
         dispatch_delete_claim(
             definition=resource_claim.definition,
             name=resource_claim.name,
             namespace=resource_claim.namespace,
         )
+        logger.info(f"Dispatched delete_claim for {name} in {namespace}")
     else:
         await resource_claim.handle_delete(logger=logger)
-
-    await ResourceClaim.unregister(name=name, namespace=namespace)
+        await ResourceClaim.unregister(name=name, namespace=namespace)
 
 @kopf.daemon(
     ResourceClaim.api_group, ResourceClaim.api_version, ResourceClaim.plural,
@@ -210,13 +210,9 @@ async def resource_claim_daemon(
                 logger.info(f"{description} found deleted in daemon")
                 return
             if not resource_claim.ignore:
-                # Delegate to worker if enabled, daemon mode active, AND claim has handle
+                # In distributed mode, dispatch to worker (if claim has handle)
                 # Claims without handle need operator for binding (cache-dependent)
-                if (
-                    Poolboy.workers_resource_claim and
-                    resource_claim.has_resource_handle and
-                    Poolboy.workers_resource_claim_daemon_mode in ('daemon', 'both')
-                ):
+                if not Poolboy.is_standalone and resource_claim.has_resource_handle:
                     from tasks.resourceclaim import dispatch_manage_claim
                     dispatch_manage_claim(
                         definition=resource_claim.definition,
@@ -268,7 +264,7 @@ async def resource_handle_event(
     )
     if resource_handle.ignore:
         return
-    if Poolboy.workers_resource_handle:
+    if not Poolboy.is_standalone:
         from tasks.resourcehandle import dispatch_manage_handle
         dispatch_manage_handle(
             definition=resource_handle.definition,
@@ -307,7 +303,7 @@ async def resource_handle_delete(
     )
     if resource_handle.ignore:
         return
-    if Poolboy.workers_resource_handle:
+    if not Poolboy.is_standalone:
         from tasks.resourcehandle import dispatch_delete_handle
         dispatch_delete_handle(
             definition=resource_handle.definition,
@@ -354,14 +350,13 @@ async def resource_handle_daemon(
                 logger.info(f"{description} found deleted in daemon")
                 return
             if not resource_handle.ignore:
-                if Poolboy.workers_resource_handle:
-                    if Poolboy.workers_resource_handle_daemon_mode in ('daemon', 'both'):
-                        from tasks.resourcehandle import dispatch_manage_handle
-                        dispatch_manage_handle(
-                            definition=resource_handle.definition,
-                            name=resource_handle.name,
-                            namespace=resource_handle.namespace,
-                        )
+                if not Poolboy.is_standalone:
+                    from tasks.resourcehandle import dispatch_manage_handle
+                    dispatch_manage_handle(
+                        definition=resource_handle.definition,
+                        name=resource_handle.name,
+                        namespace=resource_handle.namespace,
+                    )
                 else:
                     await resource_handle.manage(logger=logger)
             await asyncio.sleep(Poolboy.manage_handles_interval)
@@ -405,7 +400,7 @@ async def resource_pool_event(
         status = status,
         uid = uid,
     )
-    if Poolboy.workers_resource_pool:
+    if not Poolboy.is_standalone:
         from tasks.resourcepool import dispatch_manage_pool
         dispatch_manage_pool(
             definition=resource_pool.definition,
@@ -442,7 +437,7 @@ async def resource_pool_delete(
         status = status,
         uid = uid,
     )
-    if Poolboy.workers_resource_pool:
+    if not Poolboy.is_standalone:
         from tasks.resourcepool import dispatch_delete_pool_handles
         dispatch_delete_pool_handles(
             definition=resource_pool.definition,
@@ -491,14 +486,13 @@ async def resource_pool_daemon(
                 return
 
             if not resource_pool.ignore:
-                if Poolboy.workers_resource_pool:
-                    if Poolboy.workers_resource_pool_daemon_mode in ('daemon', 'both'):
-                        from tasks.resourcepool import dispatch_manage_pool
-                        dispatch_manage_pool(
-                            definition=resource_pool.definition,
-                            name=resource_pool.name,
-                            namespace=resource_pool.namespace,
-                        )
+                if not Poolboy.is_standalone:
+                    from tasks.resourcepool import dispatch_manage_pool
+                    dispatch_manage_pool(
+                        definition=resource_pool.definition,
+                        name=resource_pool.name,
+                        namespace=resource_pool.namespace,
+                    )
                 else:
                     await resource_pool.manage(logger=logger)
 

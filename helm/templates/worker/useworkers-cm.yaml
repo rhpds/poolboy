@@ -1,5 +1,5 @@
-{{- /* UseWorkers ConfigMap - auto-enabled when operatorMode is 'distributed' */ -}}
-{{- if or .Values.worker.enabled (eq .Values.operatorMode "distributed") }}
+{{- /* UseWorkers ConfigMap - auto-enabled when not standalone */ -}}
+{{- if or .Values.worker.enabled (ne (include "poolboy.isStandalone" .) "true") }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,40 +14,20 @@ data:
   # Celery config for sending tasks from operator
   CELERY_BROKER_URL: {{ printf "redis://%s-redis:6379/0" (include "poolboy.name" .) | quote }}
   CELERY_RESULT_BACKEND: {{ printf "redis://%s-redis:6379/1" (include "poolboy.name" .) | quote }}
-  # Lock retry delay (seconds)
+  # Lock retry delay (seconds) - used when resource is locked by another task
   WORKERS_LOCK_RETRY_COUNTDOWN: {{ .Values.useWorkers.lockRetryCountdown | default 3 | quote }}
-  # Error retry delay (seconds)
+  # Error retry delay (seconds) - used when task fails with an error
   WORKERS_ERROR_RETRY_COUNTDOWN: {{ .Values.useWorkers.errorRetryCountdown | default 30 | quote }}
-  # ResourcePool configuration
-  {{- if .Values.useWorkers.resourcePool.enabled }}
-  WORKERS_RESOURCE_POOL: "true"
-  WORKERS_RESOURCE_POOL_DAEMON_MODE: {{ .Values.useWorkers.resourcePool.daemonMode | default "scheduler" | quote }}
-  {{- if .Values.useWorkers.resourcePool.partitions }}
-  PARTITION_RESOURCE_POOL: {{ .Values.useWorkers.resourcePool.partitions | quote }}
+  # Partitions for Celery queue routing (load distribution)
+  {{- with .Values.useWorkers.partitions }}
+  {{- if .resourcePool }}
+  PARTITION_RESOURCE_POOL: {{ .resourcePool | quote }}
   {{- end }}
+  {{- if .resourceHandle }}
+  PARTITION_RESOURCE_HANDLE: {{ .resourceHandle | quote }}
   {{- end }}
-  # ResourceHandle configuration
-  {{- if .Values.useWorkers.resourceHandle.enabled }}
-  WORKERS_RESOURCE_HANDLE: "true"
-  WORKERS_RESOURCE_HANDLE_DAEMON_MODE: {{ .Values.useWorkers.resourceHandle.daemonMode | default "scheduler" | quote }}
-  {{- if .Values.useWorkers.resourceHandle.partitions }}
-  PARTITION_RESOURCE_HANDLE: {{ .Values.useWorkers.resourceHandle.partitions | quote }}
-  {{- end }}
-  {{- end }}
-  # ResourceClaim configuration
-  {{- if .Values.useWorkers.resourceClaim.enabled }}
-  WORKERS_RESOURCE_CLAIM: "true"
-  WORKERS_RESOURCE_CLAIM_DAEMON_MODE: {{ .Values.useWorkers.resourceClaim.daemonMode | default "scheduler" | quote }}
-  {{- if .Values.useWorkers.resourceClaim.partitions }}
-  PARTITION_RESOURCE_CLAIM: {{ .Values.useWorkers.resourceClaim.partitions | quote }}
-  {{- end }}
-  {{- end }}
-  # Other resource types
-  {{- range $name, $config := .Values.useWorkers }}
-  {{- if and (kindIs "map" $config) (ne $name "resourcePool") (ne $name "resourceHandle") (ne $name "resourceClaim") (ne $name "lockRetryCountdown") (ne $name "errorRetryCountdown") }}
-  {{- if $config.enabled }}
-  WORKERS_{{ $name | snakecase | upper }}: "true"
-  {{- end }}
+  {{- if .resourceClaim }}
+  PARTITION_RESOURCE_CLAIM: {{ .resourceClaim | quote }}
   {{- end }}
   {{- end }}
 {{- end }}

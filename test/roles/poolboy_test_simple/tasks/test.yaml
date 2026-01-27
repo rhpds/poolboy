@@ -525,6 +525,25 @@
   retries: 10
   delay: 1
 
+- name: Wait for all pool handles to be ready
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    namespace: "{{ poolboy_namespace }}"
+    label_selectors:
+    - "{{ poolboy_domain }}/resource-pool-name=test"
+    - "{{ poolboy_domain }}/resource-pool-namespace={{ poolboy_namespace }}"
+  register: r_get_pool_handles_ready
+  vars:
+    ready_handles: >-
+      {{ r_get_pool_handles_ready.resources | selectattr('status.ready', 'defined') | list }}
+  failed_when: >-
+    r_get_pool_handles_ready.resources | length != 3 or
+    ready_handles | length != 3
+  until: r_get_pool_handles_ready is success
+  retries: 30
+  delay: 2
+
 - name: Create ResourceClaim test-pool-match
   kubernetes.core.k8s:
     state: present
@@ -774,7 +793,7 @@
     __test_resource.spec.vars.desired_state | default('') != 'stopped'
   until: r_get_test_templated_1 is success
   delay: 5
-  retries: 10
+  retries: 30
 
 - name: Delete resource claim test-templated-1
   kubernetes.core.k8s:
@@ -987,8 +1006,8 @@
     __test_lifespan_3.status.lifespan.end is undefined or
     23 != (__test_lifespan_3.status.lifespan.end | to_datetime('%Y-%m-%dT%H:%M:%S%z') - __test_lifespan_3.status.lifespan.start | to_datetime('%Y-%m-%dT%H:%M:%S%z')).total_seconds()
   until: r_get_test_lifespan_3 is success
-  delay: 5
-  retries: 10
+  delay: 2
+  retries: 25
 
 - name: Create test-disable-creation ResourceProvider
   kubernetes.core.k8s:
@@ -1174,10 +1193,10 @@
       spec:
         resources:
         - provider:
-            apiVersion: poolboy.dev.local/v1
+            apiVersion: "{{ poolboy_domain }}/v1"
             kind: ResourceProvider
             name: test-base
-            namespace: "{{ poolboy_namespace}}"
+            namespace: "{{ poolboy_namespace }}"
 
 - name: Update ResourceClaimTest to set provision_vars for test-linked-2
   kubernetes.core.k8s:

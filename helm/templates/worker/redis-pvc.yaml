@@ -1,4 +1,4 @@
-{{- if .Values.redis.persistence.enabled }}
+{{- if and (or .Values.redis.enabled (eq .Values.operatorMode "distributed")) .Values.redis.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

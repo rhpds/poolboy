@@ -106,3 +106,21 @@ Define the image to deploy
     {{- printf "%s:v%s" .Values.image.repository .Chart.AppVersion -}}
   {{- end -}}
 {{- end -}}
+
+{{/*
+Determine if operator is running in standalone mode.
+Backward compatibility mapping:
+  - 'all-in-one' -> standalone (true)
+  - 'standalone' -> standalone (true)
+  - 'manager', 'resource-handler', 'resource-watch' -> distributed (false)
+  - 'distributed' -> distributed (false)
+  - any other value -> distributed (false)
+*/}}
+{{- define "poolboy.isStandalone" -}}
+{{- $mode := .Values.operatorMode | default "distributed" -}}
+{{- if or (eq $mode "standalone") (eq $mode "all-in-one") -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end -}}

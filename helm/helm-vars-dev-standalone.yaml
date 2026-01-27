@@ -1,0 +1,32 @@
+# Standalone mode for development
+# Usage: helm template poolboy-dev helm -f helm/helm-vars-dev-standalone.yaml | oc apply -f -
+
+clusterDomain: apps-crc.testing
+
+# Standalone mode - single operator pod handles everything
+operatorMode: standalone
+
+namespace:
+  name: poolboy-dev
+  create: false
+
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/poolboy-dev/poolboy
+  tagOverride: latest
+  pullPolicy: Always
+
+# ===========================================
+# Disable distributed components
+# ===========================================
+redis:
+  enabled: false
+
+worker:
+  enabled: false
+
+scheduler:
+  enabled: false
+
+flower:
+  enabled: false
+

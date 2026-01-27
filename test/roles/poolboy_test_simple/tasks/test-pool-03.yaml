@@ -191,7 +191,7 @@
         resources:
         - name: test-pool-03
           provider:
-            apiVersion: poolboy.dev.local/v1
+            apiVersion: "{{ poolboy_domain }}/v1"
             kind: ResourceProvider
             name: test-pool-03
             namespace: poolboy-dev

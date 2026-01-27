@@ -28,16 +28,10 @@ spec:
             value: main.py
           - name: CLUSTER_DOMAIN
             value: "{{ .Values.clusterDomain }}"
-          - name: MANAGE_CLAIMS_INTERVAL
-            value: "{{ .Values.manageClaimsInterval }}"
-          - name: MANAGE_HANDLES_INTERVAL
-            value: "{{ .Values.manageHandlesInterval }}"
-          - name: MANAGE_POOLS_INTERVAL
-            value: "{{ .Values.managePoolsInterval }}"
+          - name: IS_STANDALONE
+            value: {{ include "poolboy.isStandalone" . | quote }}
           - name: OPERATOR_DOMAIN
             value: {{ include "poolboy.operatorDomain" . }}
-          - name: OPERATOR_MODE
-            value: "{{ .Values.operatorMode }}"
           {{- if .Values.enablePrometheusMetrics}}
           - name: METRICS_ENABLED
             value: "true"

@@ -190,8 +190,8 @@
   failed_when: >-
     r_get_resource_claim.resources[0].status.resources[0].validationError is defined
   until: r_get_resource_claim is success
-  delay: 1
-  retries: 10
+  delay: 2
+  retries: 35
 
 - name: Verify update of ResourceClaimTest test-vars-03-a
   kubernetes.core.k8s_info:

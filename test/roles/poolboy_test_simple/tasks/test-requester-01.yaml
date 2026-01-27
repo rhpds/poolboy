@@ -92,7 +92,7 @@
       spec:
         resources:
         - provider:
-            apiVersion: poolboy.dev.local/v1
+            apiVersion: "{{ poolboy_domain }}/v1"
             kind: ResourceProvider
             name: test-requester-01
             namespace: poolboy-dev

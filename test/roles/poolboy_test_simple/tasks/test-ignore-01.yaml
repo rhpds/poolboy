@@ -223,8 +223,10 @@
       apiVersion: "{{ poolboy_domain }}/v1"
       kind: ResourceClaim
       metadata:
-        annotations:
-          poolboy.dev.local/resource-claim-init-timestamp: "1970-01-01T00:00:00Z"
+        annotations: >-
+          {{ {
+            poolboy_domain ~ "/resource-claim-init-timestamp": "1970-01-01T00:00:00Z"
+          } }}
         finalizers:
         - "{{ poolboy_domain }}"
         labels: >-
@@ -266,7 +268,7 @@
               "{{ poolboy_domain }}/test": "simple"
             },
             "annotations": {
-              "poolboy.dev.local/resource-claim-init-timestamp": "1970-01-01T00:00:00Z"
+              "{{ poolboy_domain }}/resource-claim-init-timestamp": "1970-01-01T00:00:00Z"
             }
           },
           "spec": {
@@ -285,14 +287,14 @@
         parameterValues:
           stringvar: one
       resourceHandle:
-        apiVersion: poolboy.dev.local/v1
+        apiVersion: "{{ poolboy_domain }}/v1"
         kind: ResourceHandle
         name: guid-abcde
         namespace: poolboy-dev
       resources:
       - name: test-ignore-01
         provider:
-          apiVersion: poolboy.dev.local/v1
+          apiVersion: "{{ poolboy_domain }}/v1"
           kind: ResourceProvider
           name: test-ignore-01
           namespace: poolboy-dev
@@ -389,18 +391,20 @@
 - name: Create ResourceHandle guid-abcde
   kubernetes.core.k8s:
     definition:
-      apiVersion: poolboy.dev.local/v1
+      apiVersion: "{{ poolboy_domain }}/v1"
       kind: ResourceClaimTest
       metadata:
-        annotations:
-          poolboy.dev.local/resource-claim-name: test-ignore-01-b
-          poolboy.dev.local/resource-claim-namespace: "{{ poolboy_test_namespace }}"
-          poolboy.dev.local/resource-handle-name: guid-abcde
-          poolboy.dev.local/resource-handle-namespace: "{{ poolboy_namespace }}"
-          poolboy.dev.local/resource-handle-uid: 00000000-0000-0000-0000-000000000000
-          poolboy.dev.local/resource-index: "0"
-          poolboy.dev.local/resource-provider-name: test-ignore-01
-          poolboy.dev.local/resource-provider-namespace: "{{ poolboy_namespace }}"
+        annotations: >-
+          {{ {
+            poolboy_domain ~ "/resource-claim-name": "test-ignore-01-b",
+            poolboy_domain ~ "/resource-claim-namespace": poolboy_test_namespace,
+            poolboy_domain ~ "/resource-handle-name": "guid-abcde",
+            poolboy_domain ~ "/resource-handle-namespace": poolboy_namespace,
+            poolboy_domain ~ "/resource-handle-uid": "00000000-0000-0000-0000-000000000000",
+            poolboy_domain ~ "/resource-index": "0",
+            poolboy_domain ~ "/resource-provider-name": "test-ignore-01",
+            poolboy_domain ~ "/resource-provider-namespace": poolboy_namespace,
+          } }}
         name: test-ignore-01-abcde
         namespace: "{{ poolboy_test_namespace }}"
       spec:
