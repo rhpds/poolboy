@@ -186,6 +186,14 @@ class ResourceHandle(KopfObject):
                 patch = [
                     {
                         "op": "add",
+                        "path": f"/metadata/labels/{Poolboy.resource_claim_name_label.replace('/', '~1')}",
+                        "value": resource_claim.name,
+                    }, {
+                        "op": "add",
+                        "path": f"/metadata/labels/{Poolboy.resource_claim_namespace_label.replace('/', '~1')}",
+                        "value": resource_claim.namespace,
+                    }, {
+                        "op": "add",
                         "path": "/spec/resourceClaim",
                         "value": {
                             "apiVersion": Poolboy.operator_api_version,
@@ -904,6 +912,9 @@ class ResourceHandle(KopfObject):
                         entry['name'] = resource['name']
                     set_resources.append(entry)
 
+                if self.status_resources == set_resources:
+                    return
+
                 patch = []
                 if not self.status:
                     patch.extend(({
@@ -943,6 +954,7 @@ class ResourceHandle(KopfObject):
                 if attempt > 2:
                     logger.exception(f"{self} failed status patch: {patch}")
                     raise
+                await self.refresh()
                 attempt += 1
 
     async def __manage_check_delete(self,

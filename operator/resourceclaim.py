@@ -377,7 +377,7 @@ class ResourceClaim(KopfObject):
     async def bind_resource_handle(self,
         logger: kopf.ObjectLogger,
         resource_claim_resources: List[Mapping],
-    ):
+    ) -> ResourceHandleT|None:
         resource_handle = await resourcehandle.ResourceHandle.bind_handle_to_claim(
             logger = logger,
             resource_claim = self,
@@ -988,7 +988,7 @@ class ResourceClaim(KopfObject):
             return self
         except kubernetes_asyncio.client.exceptions.ApiException as e:
             if e.status == 404:
-                self.unregister(name=self.name, namespace=self.namespace)
+                await self.unregister(name=self.name, namespace=self.namespace)
                 return None
             raise
 
