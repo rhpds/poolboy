@@ -8,10 +8,10 @@ RUN rm -rf /tmp/src/.git* && \
     chown -R 1001 /tmp/src && \
     chgrp -R 0 /tmp/src && \
     chmod -R g+w /tmp/src && \
-    pip install git+https://github.com/rhpds/kopf.git@add-deprecated-finalizer-support
+    cp -rp /tmp/src/.s2i/bin /tmp/scripts
 
 USER 1001
 
-RUN /usr/libexec/s2i/assemble
+RUN /tmp/scripts/assemble
 
 CMD ["/usr/libexec/s2i/run"]
