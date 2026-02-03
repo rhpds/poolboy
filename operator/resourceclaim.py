@@ -163,6 +163,10 @@ class ResourceClaim(KopfObject):
         return f"{Poolboy.operator_domain}/resource-claim-init-timestamp" in self.annotations
 
     @property
+    def create_disabled(self) -> bool:
+        return self.spec.get('disableCreation', False)
+
+    @property
     def has_resource_handle(self) -> bool:
         """Return whether this ResourceClaim is bound to  a ResourceHandle."""
         return self.status and 'resourceHandle' in self.status
@@ -385,13 +389,18 @@ class ResourceClaim(KopfObject):
         )
 
         if not resource_handle:
+            create_disabled = self.create_disabled
             for provider in await self.get_resource_providers(resource_claim_resources):
                 if provider.create_disabled:
-                    raise kopf.TemporaryError(
-                        f"Found no matching ResourceHandles for {self} and "
-                        f"ResourceHandle creation is disabled for {provider}",
-                        delay=600
-                    )
+                    create_disabled = True
+            if create_disabled:
+                logger.info(
+                    "Found no matching ResourceHandles for %s and "
+                    "ResourceHandle creation is disabled for %s",
+                    self, provider
+                )
+                return None
+
             resource_handle = await resourcehandle.ResourceHandle.create_for_claim(
                 logger = logger,
                 resource_claim = self,
@@ -865,12 +874,13 @@ class ResourceClaim(KopfObject):
             else:
                 resource_claim_resources = self.resources
 
-            if not resource_handle:
+            if resource_handle is None:
                 resource_handle = await self.bind_resource_handle(
                     logger = logger,
                     resource_claim_resources = resource_claim_resources,
                 )
-            if resource_handle.ignore:
+
+            if resource_handle is None or resource_handle.ignore:
                 return
 
             if self.check_auto_delete(logger=logger, resource_handle=resource_handle, resource_provider=resource_provider):

@@ -79,6 +79,11 @@ spec:
                       Condition to check which triggers detach of ResourceHandle from the ResourceClaim.
                       Condition is given in Jinja2 syntax similar to ansible "when" clauses.
                     type: string
+              disableCreation:
+                description: >-
+                  If set to true, then ResourceHandle creation is disabled for this ResourceClaim
+                  and it will only match to existing ResourceHandles such as are created by ResourcePools.
+                type: boolean
               lifespan:
                 description: >-
                   Lifespan configuration for the ResourceClaim.
