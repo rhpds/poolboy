@@ -52,6 +52,7 @@ class ResourceHandleMatch:
             return False
 
         # Prefer healthy resources to unknown health state
+        # Unhealthy resource handles would not be considered for a potential match.
         if self.resource_handle.is_healthy and cmp.resource_handle.is_healthy is None:
             return True
         if self.resource_handle.is_healthy is None and cmp.resource_handle.is_healthy:
@@ -61,12 +62,6 @@ class ResourceHandleMatch:
         if self.resource_handle.is_ready and not cmp.resource_handle.is_ready:
             return True
         if not self.resource_handle.is_ready and cmp.resource_handle.is_ready:
-            return False
-
-        # Prefer unknown readiness state to known unready state
-        if self.resource_handle.is_ready is None and cmp.resource_handle.is_ready is False:
-            return True
-        if not self.resource_handle.is_ready is False and cmp.resource_handle.is_ready is None:
             return False
 
         # Prefer older matches
@@ -175,7 +170,7 @@ class ResourceHandle(KopfObject):
                     # Match with (possibly empty) difference list
                     match.template_difference_count += len(diff_patch)
 
-                if match:
+                if match is not None:
                     matches.append(match)
 
             # Bind the oldest ResourceHandle with the smallest difference score
