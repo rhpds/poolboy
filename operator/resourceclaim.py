@@ -524,6 +524,7 @@ class ResourceClaim(KopfObject):
             if 'lifespan' in resource_handle.spec \
             and 'lifespan' not in self.status:
                 lifespan_value = {
+                    "start": datetime.now(timezone.utc).strftime('%FT%TZ'),
                     "end": resource_handle.lifespan_end_timestamp,
                     "maximum": lifespan_maximum,
                     "relativeMaximum": lifespan_relative_maximum,

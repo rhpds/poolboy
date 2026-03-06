@@ -1,22 +1,11 @@
 # Poolboy Development
 
-Poolboy development can be performed in the `odo` OpenShift developer CLI or building with OpenShift build configs.
-An OpenShift cluster with cluster-admin is required for `odo` development.
-https://developers.redhat.com/products/codeready-containers/overview[CodeReady Containers] is recommended for local development.
-An Ansible test suite is available for functional testing.
-
-## Development with `odo`
-
-Use of `odo` is recommended for fast iterative development.
-`odo` simplifies the build/deploy process and avoids creating unnecessary build artifacts during the development process.
-
-. Install the `odo` developer CLI as described in the OpenShift documentation:
-https://docs.openshift.com/container-platform/latest/cli_reference/developer_cli_odo/installing-odo.html[Installing odo]
+## Local Development
 
 . Create poolboy local dev resources from the provided helm chart using `poolboy.dev.local` as the operator domain:
 +
 ---------------------------------------------
-helm template helm \
+helm template helm --include-crds \
 --set deploy=false \
 --set admin.deploy=false \
 --set nameOverride=poolboy-dev \
@@ -24,32 +13,28 @@ helm template helm \
 | oc apply -f -
 ---------------------------------------------
 
-. Create a project for development using `odo`:
+. Create a project for development and set as active project:
 +
 ------------------------------
 oc create namespace poolboy-dev
+oc project poolboy-dev
 ------------------------------
 
-. Change project to `poolboy-dev` namespace:
+. Setup virtual environment:
 +
-----------------------
-oc project poolboy-dev
-----------------------
+---------------------
+python -m venv ./venv
+. ./venv/bin/activate
+pip install git+https://github.com/rhpds/kopf.git@add-deprecated-finalizer-support
+pip install -r dev-requirements.txt
+pip install -r requirements.txt
+---------------------
 
-. Grant privileges for cluster role `poolboy-dev` to default service account:
-+
--------------------------------------------------------------
-oc adm policy add-cluster-role-to-user poolboy-dev -z default
--------------------------------------------------------------
-
-. Run odo:
+. Run locally:
 +
 -------
-odo dev
+./run-local.sh
 -------
-+
-NOTE: The poolboy operator domain is specified in the devfile.
-If you are developing with a different operator domain then you will need to update the `devfile.yaml`.
 
 . Run tests with Ansible:
 +

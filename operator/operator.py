@@ -34,7 +34,7 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     )
 
     # Support deprecated resource handler finalizer
-    if Poolboy.operator_mode_resource_handler:
+    if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
         settings.persistence.deprecated_finalizer = re.compile(re.escape(Poolboy.operator_domain) + '/handler-[0-9]+$')
 
     # Store progress in status.
