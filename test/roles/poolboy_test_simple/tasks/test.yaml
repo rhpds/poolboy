@@ -18,6 +18,7 @@
   - test-pool-02.yaml
   - test-pool-03.yaml
   - test-pool-04.yaml
+  - test-pool-scaling-01.yaml
   - test-ready-01.yaml
   - test-recreate-01.yaml
   - test-vars-01.yaml
@@ -989,8 +990,8 @@
     __test_lifespan_3.status.lifespan.end is undefined or
     23 != (__test_lifespan_3.status.lifespan.end | to_datetime('%Y-%m-%dT%H:%M:%S%z') - __test_lifespan_3.status.lifespan.start | to_datetime('%Y-%m-%dT%H:%M:%S%z')).total_seconds()
   until: r_get_test_lifespan_3 is success
-  delay: 5
-  retries: 10
+  delay: 2
+  retries: 5
 
 - name: Create test-base ResourceProvider
   kubernetes.core.k8s:

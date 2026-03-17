@@ -25,6 +25,7 @@ from poolboy_templating import recursive_process_template_strings, timedelta_to_
 ResourceClaimT = TypeVar('ResourceClaimT', bound='ResourceClaim')
 ResourceHandleT = TypeVar('ResourceHandleT', bound='ResourceHandle')
 ResourcePoolT = TypeVar('ResourcePoolT', bound='ResourcePool')
+ResourcePoolScalingT = TypeVar('ResourcePoolScalingT', bound='ResourcePoolScaling')
 ResourceProviderT = TypeVar('ResourceProviderT', bound='ResourceProvider')
 
 class ResourceHandleMatch:
@@ -178,7 +179,14 @@ class ResourceHandle(KopfObject):
             matched_resource_handle = None
             for match in matches:
                 matched_resource_handle = match.resource_handle
-                patch = [
+                patch = []
+                if 'labels' not in matched_resource_handle.metadata:
+                    patch.append({
+                        "op": "add",
+                        "path": "/metadata/labels",
+                        "value": {},
+                    })
+                patch.extend([
                     {
                         "op": "add",
                         "path": f"/metadata/labels/{Poolboy.resource_claim_name_label.replace('/', '~1')}",
@@ -197,7 +205,7 @@ class ResourceHandle(KopfObject):
                             "namespace": resource_claim.namespace,
                         }
                     }
-                ]
+                ])
 
                 # Update ResourceProvider to match ResourceClaim
                 if resource_claim.has_resource_provider:
@@ -233,13 +241,23 @@ class ResourceHandle(KopfObject):
                 # Set lifespan end from default on claim bind
                 lifespan_default = matched_resource_handle.get_lifespan_default(resource_claim)
                 if lifespan_default:
-                    patch.append({
-                        "op": "add",
-                        "path": "/spec/lifespan/end",
-                        "value": (
-                            datetime.now(timezone.utc) + matched_resource_handle.get_lifespan_default_timedelta(resource_claim)
-                        ).strftime('%FT%TZ'),
-                    })
+                    lifespan_end_value = (
+                        datetime.now(timezone.utc) + matched_resource_handle.get_lifespan_default_timedelta(resource_claim)
+                    ).strftime('%FT%TZ')
+                    if 'lifespan' not in matched_resource_handle.spec:
+                        patch.append({
+                            "op": "add",
+                            "path": "/spec/lifespan",
+                            "value": {
+                                "end": lifespan_end_value,
+                            },
+                        })
+                    else:
+                        patch.append({
+                            "op": "add",
+                            "path": "/spec/lifespan/end",
+                            "value": lifespan_end_value,
+                        })
 
                 try:
                     await matched_resource_handle.json_patch(patch)
@@ -412,6 +430,7 @@ class ResourceHandle(KopfObject):
         cls,
         logger: kopf.ObjectLogger,
         resource_pool: ResourcePoolT,
+        resource_pool_scaling: ResourcePoolScalingT|None,
     ):
         definition = {
             "apiVersion": Poolboy.operator_api_version,
@@ -428,6 +447,9 @@ class ResourceHandle(KopfObject):
                 "vars": resource_pool.vars,
             }
         }
+
+        if resource_pool_scaling is not None:
+            definition['metadata']['labels'][Poolboy.resource_pool_scaling_name_label] = resource_pool_scaling.name
 
         if resource_pool.has_resource_provider:
             definition['spec']['provider'] = resource_pool.spec['provider']
@@ -837,6 +859,10 @@ class ResourceHandle(KopfObject):
     def resource_pool_namespace(self) -> str|None:
         if 'resourcePool' in self.spec:
             return self.spec['resourcePool'].get('namespace', Poolboy.namespace)
+
+    @property
+    def resource_pool_scaling_name(self) -> str|None:
+        return self.labels.get(Poolboy.resource_pool_scaling_name_label)
 
     @property
     def resource_provider_name(self) -> str|None:

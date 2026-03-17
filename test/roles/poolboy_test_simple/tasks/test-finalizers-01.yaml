@@ -109,7 +109,10 @@
   failed_when: >-
     r_get_resource_handle.resources | length != 1 or
     r_get_resource_handle.resources[0].metadata.finalizers is undefined or
-    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler']
+    (
+      r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain] and
+      r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler']
+    )
 
 - name: Set deprecated finalizer on ResourceHandle for test-finalizers-01-a
   kubernetes.core.k8s:

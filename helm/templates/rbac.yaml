@@ -57,6 +57,8 @@ rules:
   - resourcehandles/status
   - resourcepools
   - resourcepools/status
+  - resourcepoolscalings
+  - resourcepoolscalings/status
   - resourcewatches
   - resourcewatches/status
   verbs:

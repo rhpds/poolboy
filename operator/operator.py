@@ -34,7 +34,7 @@ async def startup(logger: kopf.ObjectLogger, settings: kopf.OperatorSettings, **
     )
 
     # Support deprecated resource handler finalizer
-    if Poolboy.operator_mode_resource_handler:
+    if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
         settings.persistence.deprecated_finalizer = re.compile(re.escape(Poolboy.operator_domain) + '/handler-[0-9]+$')
 
     # Store progress in status.
@@ -403,7 +403,7 @@ if(
         await resource_pool.manage(logger=logger)
 
     @kopf.on.delete(
-        Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
+        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
         label_selector=label_selector,
     )
     async def resource_pool_delete(
@@ -431,7 +431,8 @@ if(
         )
         await resource_pool.handle_delete(logger=logger)
 
-    @kopf.daemon(Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
+    @kopf.daemon(
+        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
         cancellation_timeout = 1,
         initial_delay = Poolboy.manage_pools_interval,
         label_selector=label_selector,
