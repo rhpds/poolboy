@@ -20,6 +20,27 @@
     label: "{{ _claim.metadata.name }}"
     loop_var: _claim
 
+- name: Get test ResourcePoolScalings
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourcePoolScaling
+    namespace: "{{ poolboy_namespace }}"
+    label_selectors:
+    - "{{ poolboy_domain }}/test=simple"
+  register: r_test_pools
+
+- name: Remove test ResourcePoolScalings
+  kubernetes.core.k8s:
+    api: "{{ poolboy_domain }}/v1"
+    kind: ResourcePoolScaling
+    namespace: "{{ _pool.metadata.namespace }}"
+    name: "{{ _pool.metadata.name }}"
+    state: absent
+  loop: "{{ r_test_pools.resources | default([]) }}"
+  loop_control:
+    label: "{{ _pool.metadata.name }}"
+    loop_var: _pool
+
 - name: Get test ResourcePools
   kubernetes.core.k8s_info:
     api_version: "{{ poolboy_domain }}/v1"

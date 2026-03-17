@@ -10,6 +10,9 @@ import pytimeparse
 import resourcehandle
 import resourceprovider
 
+from kubernetes_asyncio.client.rest import ApiException as k8sApiException
+from resourcepoolscaling import ResourcePoolScaling
+
 from kopfobject import KopfObject
 from poolboy import Poolboy
 
@@ -121,6 +124,8 @@ class ResourcePool(KopfObject):
 
     @property
     def max_unready(self) -> int|None:
+        """Maximum number of ResourceHandles which can be unready in the pool.
+        If exceeded then no further provisions will start."""
         return self.spec.get('maxUnready')
 
     @property
@@ -175,7 +180,7 @@ class ResourcePool(KopfObject):
                     }
                 })
                 await self.json_patch(patch)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            except k8sApiException as exception:
                 pass
 
     async def get_resource_provider(self) -> ResourceProviderT:
@@ -196,6 +201,16 @@ class ResourcePool(KopfObject):
                 if self.delete_unhealthy_resource_handles and resource_handle.is_healthy == False:
                     logger.info(f"Deleting {resource_handle} in {self} due to failed health check")
                     await resource_handle.delete()
+                    if resource_handle.resource_pool_scaling_name is not None:
+                        try:
+                            resource_pool_scaling = await ResourcePoolScaling.fetch(
+                                name=resource_handle.resource_pool_scaling_name,
+                                namespace=resource_handle.namespace,
+                            )
+                            await resource_pool_scaling.decrement_created_count()
+                        except k8sApiException as exception:
+                            if exception.status != 404:
+                                raise
                     continue
                 available_resource_handles.append(resource_handle)
                 if resource_handle.is_ready:
@@ -206,22 +221,35 @@ class ResourcePool(KopfObject):
                     "ready": resource_handle.is_ready,
                 })
 
-            resource_handle_deficit = self.min_available - len(available_resource_handles)
+            min_available_deficit = self.min_available - len(available_resource_handles)
+            resource_pool_scaling = await ResourcePoolScaling.get_active_scaling_for_pool(self.name)
+            unready_count = len(available_resource_handles) - len(ready_resource_handles)
 
-            if self.max_unready is not None:
-                unready_count = len(available_resource_handles) - len(ready_resource_handles)
-                if resource_handle_deficit > self.max_unready - unready_count:
-                    resource_handle_deficit = self.max_unready - unready_count
-
-            if resource_handle_deficit > 0:
-                for i in range(resource_handle_deficit):
-                    resource_handle = await resourcehandle.ResourceHandle.create_for_pool(
-                        logger=logger,
-                        resource_pool=self
+            while (
+                (self.max_unready is None or unready_count < self.max_unready) and
+                (
+                    min_available_deficit > 0 or
+                    (
+                        resource_pool_scaling is not None and
+                        resource_pool_scaling.count > resource_pool_scaling.current_count
                     )
-                    resource_handles_for_status.append({
-                        "name": resource_handle.name,
-                    })
+                )
+            ):
+                resource_handle = await resourcehandle.ResourceHandle.create_for_pool(
+                    logger=logger,
+                    resource_pool=self,
+                    resource_pool_scaling=resource_pool_scaling,
+                )
+                resource_handles_for_status.append({
+                    "name": resource_handle.name,
+                })
+                unready_count += 1
+                min_available_deficit -= 1
+                if resource_pool_scaling is not None:
+                    logger.info("Created %s for %s with %s", resource_handle, self, resource_pool_scaling)
+                    await resource_pool_scaling.increment_created_count()
+                else:
+                    logger.info("Created %s for %s min available", resource_handle, self)
 
             patch = []
             if not self.status:

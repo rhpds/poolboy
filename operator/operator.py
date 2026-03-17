@@ -403,7 +403,7 @@ if(
         await resource_pool.manage(logger=logger)
 
     @kopf.on.delete(
-        Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
+        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
         label_selector=label_selector,
     )
     async def resource_pool_delete(
@@ -431,7 +431,8 @@ if(
         )
         await resource_pool.handle_delete(logger=logger)
 
-    @kopf.daemon(Poolboy.operator_domain, Poolboy.operator_version, 'resourcepools',
+    @kopf.daemon(
+        ResourcePool.api_group, ResourcePool.api_version, ResourcePool.plural,
         cancellation_timeout = 1,
         initial_delay = Poolboy.manage_pools_interval,
         label_selector=label_selector,

@@ -38,6 +38,7 @@ class Poolboy():
     resource_pool_name_label = f"{operator_domain}/resource-pool-name"
     resource_pool_namespace_annotation = f"{operator_domain}/resource-pool-namespace"
     resource_pool_namespace_label = f"{operator_domain}/resource-pool-namespace"
+    resource_pool_scaling_name_label = f"{operator_domain}/resource-pool-scaling-name"
     resource_provider_name_annotation = f"{operator_domain}/resource-provider-name"
     resource_provider_namespace_annotation = f"{operator_domain}/resource-provider-namespace"
     resource_requester_email_annotation = f"{operator_domain}/resource-requester-email"

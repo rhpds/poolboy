@@ -94,10 +94,12 @@ oc start-build poolboy --from-dir=. --follow
 +
 --------------------------------------------------------------------------------
 helm template helm \
+--set enablePrometheusMetrics=false \
 --set nameOverride=poolboy-dev \
 --set namespace.create=false \
 --set manageClaimsInterval=5 \
 --set manageHandlesInterval=5 \
+--set managePoolsInterval=5 \
 --set operatorDomain.name=poolboy.dev.local \
 --set resourceHandlerCount=2 \
 --set image.tagOverride=- \

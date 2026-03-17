@@ -1,0 +1,96 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: resourcepoolscalings.poolboy.gpte.redhat.com
+spec:
+  group: poolboy.gpte.redhat.com
+  scope: Namespaced
+  names:
+    plural: resourcepoolscalings
+    singular: resourcepoolscaling
+    kind: ResourcePoolScaling
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Pool
+      type: string
+      jsonPath: .spec.resourcePool.name
+    - name: At
+      type: string
+      jsonPath: .spec.at
+    - name: Count
+      type: integer
+      jsonPath: .spec.count
+    - name: Created
+      type: integer
+      jsonPath: .status.count
+    - name: State
+      type: string
+      jsonPath: .status.state
+    schema:
+      openAPIV3Schema:
+        description: >-
+          ResourcePoolScalings configure ResourceHandles to be added to a ResourcePool at a specific time.
+        type: object
+        required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+            properties:
+              name:
+                type: string
+                maxLength: 63
+                pattern: ^[a-z0-9A-Z]([a-z0-9A-Z\-._]*[a-z0-9A-Z])?$
+          spec:
+            description: ResourcePoolScaling specification
+            type: object
+            properties:
+              at:
+                type: string
+                format: date-time
+              count:
+                type: integer
+                minimum: 0
+              resourcePool:
+                type: object
+                properties:
+                  name:
+                    type: string
+                required:
+                - name
+            required:
+            - count
+            - resourcePool
+          status:
+            description: ResourcePoolScaling status
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+            properties:
+              count:
+                description: Number of ResourceHandles created
+                type: integer
+              diffBase:
+                description: Kopf diffbase
+                type: string
+              kopf:
+                description: Kopf status
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              state:
+                type: string
+                enum:
+                - waiting
+                - scaling
+                - done

@@ -25,6 +25,7 @@ from poolboy_templating import recursive_process_template_strings, timedelta_to_
 ResourceClaimT = TypeVar('ResourceClaimT', bound='ResourceClaim')
 ResourceHandleT = TypeVar('ResourceHandleT', bound='ResourceHandle')
 ResourcePoolT = TypeVar('ResourcePoolT', bound='ResourcePool')
+ResourcePoolScalingT = TypeVar('ResourcePoolScalingT', bound='ResourcePoolScaling')
 ResourceProviderT = TypeVar('ResourceProviderT', bound='ResourceProvider')
 
 class ResourceHandleMatch:
@@ -429,6 +430,7 @@ class ResourceHandle(KopfObject):
         cls,
         logger: kopf.ObjectLogger,
         resource_pool: ResourcePoolT,
+        resource_pool_scaling: ResourcePoolScalingT|None,
     ):
         definition = {
             "apiVersion": Poolboy.operator_api_version,
@@ -445,6 +447,9 @@ class ResourceHandle(KopfObject):
                 "vars": resource_pool.vars,
             }
         }
+
+        if resource_pool_scaling is not None:
+            definition['metadata']['labels'][Poolboy.resource_pool_scaling_name_label] = resource_pool_scaling.name
 
         if resource_pool.has_resource_provider:
             definition['spec']['provider'] = resource_pool.spec['provider']
@@ -854,6 +859,10 @@ class ResourceHandle(KopfObject):
     def resource_pool_namespace(self) -> str|None:
         if 'resourcePool' in self.spec:
             return self.spec['resourcePool'].get('namespace', Poolboy.namespace)
+
+    @property
+    def resource_pool_scaling_name(self) -> str|None:
+        return self.labels.get(Poolboy.resource_pool_scaling_name_label)
 
     @property
     def resource_provider_name(self) -> str|None:
