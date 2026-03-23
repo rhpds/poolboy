@@ -1,9 +1,12 @@
 import asyncio
-from datetime import datetime
+import os
+import random
+from datetime import datetime, timezone
 from typing import List, Mapping
 
 import kopf
 import kubernetes_asyncio
+from kubernetes_asyncio.client.models import CoreV1Event, V1ObjectMeta, V1ObjectReference
 from metrics.timer_decorator import TimerDecoratorMeta
 from poolboy import Poolboy
 
@@ -96,6 +99,34 @@ class KopfObject(metaclass=TimerDecoratorMeta):
         self.spec = definition['spec']
         self.status = definition.get('status', {})
         self.uid = definition['metadata']['uid']
+
+    async def create_event(self, action, type, reason, message, logger=None):
+        try:
+            await Poolboy.core_v1_api.create_namespaced_event(
+                namespace=self.namespace,
+                body=CoreV1Event(
+                    action=action,
+                    event_time=datetime.now(timezone.utc).strftime("%FT%T.%fZ"),
+                    involved_object=V1ObjectReference(
+                        api_version=self.api_version,
+                        kind=self.kind,
+                        name=self.name,
+                        namespace=self.namespace,
+                        uid=self.uid
+                    ),
+                    message=message,
+                    metadata=V1ObjectMeta(
+                        generate_name=f"{self.name}-"
+                    ),
+                    reason=reason,
+                    reporting_component="poolboy",
+                    reporting_instance=os.environ['HOSTNAME'],
+                    type=type,
+                )
+            )
+        except kubernetes_asyncio.client.exceptions.ApiException as e:
+            if logger:
+                logger.exception("Failed to create event!")
 
     async def delete(self):
         try:

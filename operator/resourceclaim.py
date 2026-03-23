@@ -539,12 +539,28 @@ class ResourceClaim(KopfObject):
             else:
                 if self.lifespan_end_timestamp \
                 and not resource_handle.lifespan_end_timestamp:
+                    logger.info("Clearing lifespan end status for %s after removed from %s", self, resource_handle);
+                    await self.create_event(
+                        logger=logger,
+                        action="LifespanChange",
+                        type="Normal",
+                        reason="Lifespan end cleared",
+                        message=f"Cleared lifespan end for {self} after removed from {resource_handle}",
+                    )
                     patch.append({
                         "op": "remove",
                         "path": "/status/lifespan/end",
                     })
                 elif resource_handle.lifespan_end_timestamp \
                 and self.lifespan_end_timestamp != resource_handle.lifespan_end_timestamp:
+                    logger.info("Updating lifespan end to %s for %s from %s", self.lifespan_end_timestamp, self, resource_handle);
+                    await self.create_event(
+                        logger=logger,
+                        action="LifespanChange",
+                        type="Normal",
+                        reason="Lifespan end changed",
+                        message=f"Updated lifespan end to {self.lifespan_end_timestamp} for {self} from {resource_handle}",
+                    )
                     patch.append({
                         "op": "add",
                         "path": "/status/lifespan/end",
