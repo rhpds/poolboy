@@ -251,6 +251,9 @@ def jinja2process(template, omit=None, variables={}, template_variables={}):
             else:
                 return self.get_typed_value() <= cmp
 
+        def __len__(self):
+            return len(self.get_typed_value());
+
         def __lt__(self):
             if isinstance(TemplateVariable, cmp):
                 return self.get_typed_value() < cmp.get_typed_value()
