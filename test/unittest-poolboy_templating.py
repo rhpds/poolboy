@@ -635,5 +635,44 @@ class TestJsonPatch(unittest.TestCase):
             "a",
         )
 
+    def test_47(self):
+        template = "{{ a | length | int }}"
+        template_variables = {
+            "a": [0, 1, 2],
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, template_variables=template_variables
+            ),
+            3,
+        )
+
+    def test_48(self):
+        template = "{{ a.b | length | int }}"
+        template_variables = {
+            "a": {
+                "b": [0, 1, 2],
+            }
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, template_variables=template_variables
+            ),
+            3,
+        )
+
+    def test_49(self):
+        template = "{{ a | length | int }}"
+        template_variables = {
+            "a": "{{ b | object }}",
+            "b": [0, 1, 2],
+        }
+        self.assertEqual(
+            recursive_process_template_strings(
+                template, template_variables=template_variables
+            ),
+            3,
+        )
+
 if __name__ == '__main__':
     unittest.main()
