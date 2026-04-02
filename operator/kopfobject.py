@@ -13,6 +13,46 @@ from poolboy import Poolboy
 
 class KopfObject(metaclass=TimerDecoratorMeta):
     @classmethod
+    async def fetch(cls, name, namespace):
+        definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
+            group = cls.api_group,
+            name = name,
+            namespace = namespace,
+            plural = cls.plural,
+            version = cls.api_version,
+        )
+        return cls.from_definition(definition)
+
+    @classmethod
+    async def list(cls, label_selector=None, namespace=None):
+        _continue = None
+        while True:
+            if namespace is None:
+                obj_list = await Poolboy.custom_objects_api.list_cluster_custom_object(
+                    group = cls.api_group,
+                    label_selector = label_selector,
+                    plural = cls.plural,
+                    version = cls.api_version,
+                    limit = 20,
+                    _continue = _continue
+                )
+            else:
+                obj_list = await Poolboy.custom_objects_api.list_namespaced_custom_object(
+                    group = cls.api_group,
+                    label_selector = label_selector,
+                    namespace = namespace,
+                    plural = cls.plural,
+                    version = cls.api_version,
+                    limit = 20,
+                    _continue = _continue
+                )
+            for definition in obj_list.get('items', []):
+                yield cls.from_definition(definition)
+            _continue = obj_list['metadata'].get('continue')
+            if not _continue:
+                return
+
+    @classmethod
     def from_definition(cls, definition):
         return cls(
             annotations=definition['metadata'].get('annotations', {}),
@@ -191,5 +231,15 @@ class KopfObject(metaclass=TimerDecoratorMeta):
                 "status": patch
             },
             _content_type = 'application/merge-patch+json'
+        )
+        self.refresh_from_definition(definition)
+
+    async def refetch(self):
+        definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
+            group = self.api_group,
+            name = self.name,
+            namespace = self.namespace,
+            plural = self.plural,
+            version = self.api_version,
         )
         self.refresh_from_definition(definition)
