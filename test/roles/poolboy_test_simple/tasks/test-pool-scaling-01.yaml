@@ -30,6 +30,7 @@
           definition:
             spec:
               value: "{% raw %}{{ value }}{% endraw %}"
+          enable: true
         updateFilters:
         - pathMatch: /spec/.*
           allowedOps:
