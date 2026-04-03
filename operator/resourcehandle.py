@@ -1577,27 +1577,30 @@ class ResourceHandle(KopfObject):
                 "value": all_resources_ready,
             })
 
-        if self.has_resource_provider:
-            resource_provider = None
-            try:
-                resource_provider = await self.get_resource_provider()
-                if resource_provider.status_summary_template:
-                    status_summary = resource_provider.make_status_summary(
-                        resource_handle=self,
-                        resources=resources,
-                    )
-                    if status_summary != status.get('summary'):
-                        patch.append({
-                            "op": "add",
-                            "path": "/status/summary",
-                            "value": status_summary,
-                        })
-            except kubernetes_asyncio.client.exceptions.ApiException:
-                logger.exception(
-                    f"Failed to get ResourceProvider {self.resource_provider_name} for {self}"
+
+        resource_provider_name = (
+            self.resource_provider_name if self.has_resource_provider else
+            self.spec['resources'][-1]['provider']['name']
+        )
+        try:
+            resource_provider = await resourceprovider.ResourceProvider.get(resource_provider_name)
+            if resource_provider.status_summary_template:
+                status_summary = resource_provider.make_status_summary(
+                    resource_handle=self,
+                    resources=resources,
                 )
-            except Exception:
-                logger.exception(f"Failed to generate status summary for {self}")
+                if status_summary != status.get('summary'):
+                    patch.append({
+                        "op": "add",
+                        "path": "/status/summary",
+                        "value": status_summary,
+                    })
+        except kubernetes_asyncio.client.exceptions.ApiException:
+            logger.exception(
+                f"Failed to get ResourceProvider {resource_provider_name} for {self}"
+            )
+        except Exception:
+            logger.exception(f"Failed to generate status summary for {self}")
         if patch:
             while True:
                 try:
