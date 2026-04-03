@@ -18,6 +18,7 @@
   - test-pool-02.yaml
   - test-pool-03.yaml
   - test-pool-04.yaml
+  - test-pool-preference-01.yaml
   - test-pool-scaling-01.yaml
   - test-ready-01.yaml
   - test-recreate-01.yaml
