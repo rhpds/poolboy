@@ -12,6 +12,7 @@ from poolboy import Poolboy
 from resourceclaim import ResourceClaim
 from resourcehandle import ResourceHandle
 from resourcepool import ResourcePool
+from resourcepoolscaling import ResourcePoolScaling
 from resourceprovider import ResourceProvider
 from resourcewatch import ResourceWatch
 
@@ -132,10 +133,48 @@ if Poolboy.operator_mode_manager:
         resource_pool = ResourcePool.from_definition(definition)
         await resource_pool.assign_resource_handler()
 
-if(
-    Poolboy.operator_mode_all_in_one or
-    Poolboy.operator_mode_resource_handler
-):
+if Poolboy.operator_mode_manager or Poolboy.operator_mode_all_in_one:
+    # ResourcePoolScalings are managed in manager and all-in-one mode
+    @kopf.on.create(
+        ResourcePoolScaling.api_group, ResourcePoolScaling.api_version, ResourcePoolScaling.plural,
+        label_selector=label_selector,
+        id='resource_pool_scaling_create',
+    )
+    @kopf.on.resume(
+        ResourcePoolScaling.api_group, ResourcePoolScaling.api_version, ResourcePoolScaling.plural,
+        label_selector=label_selector,
+        id='resource_pool_scaling_resume',
+    )
+    @kopf.on.update(
+        ResourcePoolScaling.api_group, ResourcePoolScaling.api_version, ResourcePoolScaling.plural,
+        label_selector=label_selector,
+        id='resource_pool_scaling_update',
+    )
+    async def resource_pool_scaling_event(
+        annotations: kopf.Annotations,
+        labels: kopf.Labels,
+        logger: kopf.ObjectLogger,
+        meta: kopf.Meta,
+        name: str,
+        namespace: str,
+        spec: kopf.Spec,
+        status: kopf.Status,
+        uid: str,
+        **_
+    ):
+        resource_pool_scaling = ResourcePoolScaling(
+            annotations = annotations,
+            labels = labels,
+            meta = meta,
+            name = name,
+            namespace = namespace,
+            spec = spec,
+            status = status,
+            uid = uid,
+        )
+        await resource_pool_scaling.manage(logger=logger)
+
+if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
     # Resources are handled in either all-in-one or resource-handler mode.
     # The difference is only if labels are used to select which resources to handle.
 

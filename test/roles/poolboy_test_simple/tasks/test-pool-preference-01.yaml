@@ -1,0 +1,185 @@
+---
+- name: Create ResourceProvider test-pool-preference-01
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceProvider
+      metadata:
+        name: test-pool-preference-01
+        namespace: "{{ poolboy_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        override:
+          apiVersion: "{{ poolboy_domain }}/v1"
+          kind: ResourceClaimTest
+          metadata:
+            name: "test-pool-preference-01-{% raw %}{{ guid }}{% endraw %}"
+            namespace: "{{ poolboy_test_namespace }}"
+        template:
+          enable: true
+        validation:
+          openAPIV3Schema:
+            additionalProperties: false
+            properties:
+              spec:
+                additionalProperties: false
+                properties:
+                  value:
+                    type: string
+                required:
+                - value
+                type: object
+
+- name: Create ResourcePool test-pool-preference-01-a
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourcePool
+      metadata:
+        name: test-pool-preference-01-a
+        namespace: "{{ poolboy_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        minAvailable: 1
+        preferenceScore: 10
+        resources:
+        - provider:
+            apiVersion: "{{ poolboy_domain }}/v1"
+            kind: ResourceProvider
+            name: test-pool-preference-01
+            namespace: "{{ poolboy_namespace }}"
+          template:
+            spec:
+              value: foo
+
+- name: Create ResourcePool test-pool-preference-01-b
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourcePool
+      metadata:
+        name: test-pool-preference-01-b
+        namespace: "{{ poolboy_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        minAvailable: 1
+        preferenceScore: 20
+        resources:
+        - provider:
+            apiVersion: "{{ poolboy_domain }}/v1"
+            kind: ResourceProvider
+            name: test-pool-preference-01
+            namespace: "{{ poolboy_namespace }}"
+          template:
+            spec:
+              value: foo
+
+- name: Verify ResourceHandles for test-pool-preference-01-a
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    namespace: "{{ poolboy_namespace }}"
+    label_selectors:
+    - "{{ poolboy_domain }}/resource-pool-name = test-pool-preference-01-a"
+  register: r_get_resource_handles_a
+  failed_when: >-
+    r_get_resource_handles_a.resources | length != 1 or
+    r_get_resource_handles_a.resources[0].spec.preferenceScore != 10
+  retries: 5
+  delay: 1
+
+- name: Verify ResourceHandles for test-pool-preference-01-b
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceHandle
+    namespace: "{{ poolboy_namespace }}"
+    label_selectors:
+    - "{{ poolboy_domain }}/resource-pool-name = test-pool-preference-01-b"
+  register: r_get_resource_handles_b
+  failed_when: >-
+    r_get_resource_handles_b.resources | length != 1 or
+    r_get_resource_handles_b.resources[0].spec.preferenceScore != 20
+  retries: 5
+  delay: 1
+
+- name: Set resource_handle_b
+  ansible.builtin.set_fact:
+    resource_handle_b: "{{ r_get_resource_handles_b.resources[0] }}"
+
+- name: Create ResourceClaim test-pool-preference-01
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: "{{ poolboy_domain }}/v1"
+      kind: ResourceClaim
+      metadata:
+        name: test-pool-preference-01
+        namespace: "{{ poolboy_test_namespace }}"
+        labels: >-
+          {{ {
+            poolboy_domain ~ "/test": "simple"
+          } }}
+      spec:
+        resources:
+        - provider:
+            name: test-pool-preference-01
+          template:
+            spec:
+              value: foo
+
+- name: Verify handling of ResourceClaim test-pool-preference-01
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-pool-preference-01
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim
+  failed_when: >-
+    r_get_resource_claim.resources[0].status.resourceHandle.name != resource_handle_b.metadata.name
+  until: r_get_resource_claim is success
+  delay: 1
+  retries: 10
+
+- name: Delete ResourcePool test-pool-preference-01-a
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourcePool
+    name: test-pool-preference-01-a
+    namespace: "{{ poolboy_namespace }}"
+    state: absent
+
+- name: Delete ResourcePool test-pool-preference-01-b
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourcePool
+    name: test-pool-preference-01-b
+    namespace: "{{ poolboy_namespace }}"
+    state: absent
+
+- name: Delete ResourceClaim test-pool-preference-01
+  kubernetes.core.k8s:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-pool-preference-01
+    namespace: "{{ poolboy_test_namespace }}"
+    state: absent
+
+- name: Verify delete of ResourceClaim test-pool-preference-01
+  kubernetes.core.k8s_info:
+    api_version: "{{ poolboy_domain }}/v1"
+    kind: ResourceClaim
+    name: test-pool-preference-01
+    namespace: "{{ poolboy_test_namespace }}"
+  register: r_get_resource_claim
+  failed_when: r_get_resource_claim.resources | length != 0
+  until: r_get_resource_claim is success
+  retries: 5
+  delay: 1

@@ -16,7 +16,6 @@ import poolboy_k8s
 from kopfobject import KopfObject
 from poolboy import Poolboy
 import resourcehandle
-import resourceprovider
 
 logger = logging.getLogger('resource_watch')
 

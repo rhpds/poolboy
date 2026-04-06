@@ -37,20 +37,14 @@ class ResourceHandleMatch:
 
     def __lt__(self, cmp):
         '''Compare matches by preference'''
-        if self.resource_count_difference < cmp.resource_count_difference:
-            return True
-        if self.resource_count_difference > cmp.resource_count_difference:
-            return False
+        if self.resource_count_difference != cmp.resource_count_difference:
+            self.resource_count_difference < cmp.resource_count_difference
 
-        if self.resource_name_difference_count < cmp.resource_name_difference_count:
-            return True
-        if self.resource_name_difference_count > cmp.resource_name_difference_count:
-            return False
+        if self.resource_name_difference_count != cmp.resource_name_difference_count:
+            return self.resource_name_difference_count < cmp.resource_name_difference_count
 
-        if self.template_difference_count < cmp.template_difference_count:
-            return True
-        if self.template_difference_count > cmp.template_difference_count:
-            return False
+        if self.template_difference_count != cmp.template_difference_count:
+            return self.template_difference_count < cmp.template_difference_count
 
         # Prefer healthy resources to unknown health state
         # Unhealthy resource handles would not be considered for a potential match.
@@ -64,6 +58,10 @@ class ResourceHandleMatch:
             return True
         if not self.resource_handle.is_ready and cmp.resource_handle.is_ready:
             return False
+
+        # Prefer based on preference score
+        if self.resource_handle.preference_score != cmp.resource_handle.preference_score:
+            return self.resource_handle.preference_score > cmp.resource_handle.preference_score
 
         # Prefer older matches
         return self.resource_handle.creation_timestamp < cmp.resource_handle.creation_timestamp
@@ -482,6 +480,9 @@ class ResourceHandle(KopfObject):
                     datetime.now(timezone.utc) + resource_pool.lifespan_unclaimed_timedelta
                 ).strftime("%FT%TZ")
 
+        if resource_pool.preference_score is not None:
+            definition['spec']['preferenceScore'] = resource_pool.preference_score
+
         definition = await Poolboy.custom_objects_api.create_namespaced_custom_object(
             body = definition,
             group = Poolboy.operator_domain,
@@ -832,17 +833,25 @@ class ResourceHandle(KopfObject):
         return self.spec.get('provider', {}).get('parameterValues', {})
 
     @property
+    def preference_score(self) -> float:
+        """Preference score for match preference"""
+        return self.spec.get('preferenceScore', 0)
+
+    @property
     def resource_claim_description(self) -> str|None:
+        """ResourceClaim descriptive string if bound to ResourceClaim"""
         if not 'resourceClaim' not in self.spec:
             return None
         return f"ResourceClaim {self.resource_claim_name} in {self.resource_claim_namespace}"
 
     @property
     def resource_claim_name(self) -> str|None:
+        """ResourceClaim name if bound to ResourceClaim"""
         return self.spec.get('resourceClaim', {}).get('name')
 
     @property
     def resource_claim_namespace(self) -> str|None:
+        """ResourceClaim namespace if bound to ResourceClaim"""
         return self.spec.get('resourceClaim', {}).get('namespace')
 
     @property
@@ -852,16 +861,19 @@ class ResourceHandle(KopfObject):
 
     @property
     def resource_pool_name(self) -> str|None:
-        if 'resourcePool' in self.spec:
-            return self.spec['resourcePool']['name']
+        """ResourcePool name if from a ResourcePool"""
+        return self.spec.get('resourcePool', {}).get('name')
 
     @property
     def resource_pool_namespace(self) -> str|None:
-        if 'resourcePool' in self.spec:
-            return self.spec['resourcePool'].get('namespace', Poolboy.namespace)
+        """ResourcePool namespace if from a ResourcePool"""
+        if 'resourcePool' not in self.spec:
+            return None
+        return self.spec.get('resourcePool', {}).get('namespace', Poolboy.namespace)
 
     @property
     def resource_pool_scaling_name(self) -> str|None:
+        """ResourcePool namespace if from a ResourcePoolScaling"""
         return self.labels.get(Poolboy.resource_pool_scaling_name_label)
 
     @property
@@ -1577,27 +1589,30 @@ class ResourceHandle(KopfObject):
                 "value": all_resources_ready,
             })
 
-        if self.has_resource_provider:
-            resource_provider = None
-            try:
-                resource_provider = await self.get_resource_provider()
-                if resource_provider.status_summary_template:
-                    status_summary = resource_provider.make_status_summary(
-                        resource_handle=self,
-                        resources=resources,
-                    )
-                    if status_summary != status.get('summary'):
-                        patch.append({
-                            "op": "add",
-                            "path": "/status/summary",
-                            "value": status_summary,
-                        })
-            except kubernetes_asyncio.client.exceptions.ApiException:
-                logger.exception(
-                    f"Failed to get ResourceProvider {self.resource_provider_name} for {self}"
+
+        resource_provider_name = (
+            self.resource_provider_name if self.has_resource_provider else
+            self.spec['resources'][-1]['provider']['name']
+        )
+        try:
+            resource_provider = await resourceprovider.ResourceProvider.get(resource_provider_name)
+            if resource_provider.status_summary_template:
+                status_summary = resource_provider.make_status_summary(
+                    resource_handle=self,
+                    resources=resources,
                 )
-            except Exception:
-                logger.exception(f"Failed to generate status summary for {self}")
+                if status_summary != status.get('summary'):
+                    patch.append({
+                        "op": "add",
+                        "path": "/status/summary",
+                        "value": status_summary,
+                    })
+        except kubernetes_asyncio.client.exceptions.ApiException:
+            logger.exception(
+                f"Failed to get ResourceProvider {resource_provider_name} for {self}"
+            )
+        except Exception:
+            logger.exception(f"Failed to generate status summary for {self}")
         if patch:
             while True:
                 try:

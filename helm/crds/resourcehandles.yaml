@@ -97,6 +97,14 @@ spec:
                       Ex: "3d" for 3 days.
                       This value may be a template string.
                     type: string
+              preferenceScore:
+                description: >-
+                  The preference score is used to compare otherwise equivalent ResourceHandles
+                  that may match a ResourceClaim.
+                  A higher preference score will match before a lower score.
+                  If not specified or equal then the oldest ResourceHandle is preferred.
+                  Default is inherited from the ResourcePool or otherwise is zero.
+                type: number
               provider:
                 description: >-
                   ResourceProvider specification used to generate resources rather than

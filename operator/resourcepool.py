@@ -133,6 +133,11 @@ class ResourcePool(KopfObject):
         return self.spec.get('minAvailable', 0)
 
     @property
+    def preference_score(self) -> float|None:
+        """Preference score to apply to ResourceHandles created for ResourcePool"""
+        return self.spec.get('preferenceScore')
+
+    @property
     def resource_handler_idx(self) -> int:
         """Label value used to select which resource handler pod should manage this ResourcePool."""
         return int(UUID(self.uid)) % Poolboy.resource_handler_count

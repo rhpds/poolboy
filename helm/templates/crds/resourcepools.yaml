@@ -106,6 +106,10 @@ spec:
                   ResourcePool.
                 type: integer
                 minimum: 0
+              preferenceScore:
+                description: >-
+                  The preference score to apply to ResourceHandles created from this ResourcePool.
+                type: number
               provider:
                 description: >-
                   ResourceProvider specification used to generate resources rather than
