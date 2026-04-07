@@ -38,7 +38,7 @@ class ResourceHandleMatch:
     def __lt__(self, cmp):
         '''Compare matches by preference'''
         if self.resource_count_difference != cmp.resource_count_difference:
-            self.resource_count_difference < cmp.resource_count_difference
+            return self.resource_count_difference < cmp.resource_count_difference
 
         if self.resource_name_difference_count != cmp.resource_name_difference_count:
             return self.resource_name_difference_count < cmp.resource_name_difference_count
