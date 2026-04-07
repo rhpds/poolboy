@@ -840,9 +840,9 @@ class ResourceHandle(KopfObject):
     @property
     def resource_claim_description(self) -> str|None:
         """ResourceClaim descriptive string if bound to ResourceClaim"""
-        if not 'resourceClaim' not in self.spec:
-            return None
-        return f"ResourceClaim {self.resource_claim_name} in {self.resource_claim_namespace}"
+        if 'resourceClaim' in self.spec:
+            return f"ResourceClaim {self.resource_claim_name} in {self.resource_claim_namespace}"
+        return None
 
     @property
     def resource_claim_name(self) -> str|None:
