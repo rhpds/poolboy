@@ -3,6 +3,7 @@ import logging
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from time import time
 from typing import Any, List, Mapping, TypeVar
 from uuid import UUID
 
@@ -572,7 +573,6 @@ class ResourceHandle(KopfObject):
         return cls.all_instances.get(name)
 
     @classmethod
-    # FIXME - Investigate if this is not working
     def start_watch_other(cls) -> None:
         logger = logging.getLogger('watch_other_handles')
         cls.watch_other_task = asyncio.create_task(cls.watch_other(logger))
@@ -690,9 +690,18 @@ class ResourceHandle(KopfObject):
 
     @classmethod
     async def watch_other(cls, logger) -> None:
+        last_start = time()
         while True:
+            logger.info("Starting watch for ResourceHandles managed by other handlers.")
             try:
-                # FIXME - clear stale cache entries
+                # Clear stale cache entries
+                for resource_handle in cls.all_instances.values():
+                    if (
+                        resource_handle.resource_handler_idx != Poolboy.resource_handler_idx and
+                        resource_handle.last_seen < last_start
+                    ):
+                        resource_handle.__unregister()
+                last_start = time()
                 await cls.__watch_other(logger)
             except K8sApiException as exception:
                 if exception.status != 410:
@@ -719,6 +728,10 @@ class ResourceHandle(KopfObject):
                 await cls.unregister(event_obj['metadata']['name'])
             else:
                 await cls.register_definition(event_obj)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.last_seen = time()
 
     def __str__(self) -> str:
         return f"ResourceHandle {self.name}"
@@ -1114,6 +1127,14 @@ class ResourceHandle(KopfObject):
         and (not maximum_end or relative_maximum_end < maximum_end):
             return relative_maximum_end
         return maximum_end
+
+    def refresh(self, **kwargs) -> None:
+        super().refresh(**kwargs)
+        self.last_seen = time()
+
+    def refresh_from_definition(self, definition) -> None:
+        super().refresh_from_definition(definition)
+        self.last_seen = time()
 
     def set_resource_healthy(self, resource_index: int, value: bool|None) -> None:
         if value is None:
