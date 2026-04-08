@@ -763,7 +763,7 @@ class ResourceHandle(KopfObject):
 
     @property
     def has_lifespan_end(self) -> bool:
-        'end' in self.spec.get('lifespan', {})
+        return 'end' in self.spec.get('lifespan', {})
 
     @property
     def has_resource_provider(self) -> bool:
