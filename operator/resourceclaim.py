@@ -665,23 +665,27 @@ class ResourceClaim(KopfObject):
                 else:
                     raise
 
-    async def handle_delete(self, logger: kopf.ObjectLogger):
-        if self.has_resource_handle:
-            try:
-                await Poolboy.custom_objects_api.delete_namespaced_custom_object(
-                    group = Poolboy.operator_domain,
-                    name = self.resource_handle_name,
-                    namespace = self.resource_handle_namespace,
-                    plural = 'resourcehandles',
-                    version = Poolboy.operator_version,
-                )
-                logger.info(
-                    f"Propagated delete of ResourceClaim {self.name} in {self.namespace} "
-                    f"to ResourceHandle {self.resource_handle_name}"
-                )
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
-                if exception.status != 404:
-                    raise
+    async def handle_delete(self, logger: kopf.ObjectLogger) -> None:
+        """Handle delete of ResourceClaim my propagating to delete of any bound
+        ResourceHandle."""
+        if not self.has_resource_handle:
+            logger.info("%s deleted before binding to any ResourceHandle", self)
+            return
+        try:
+            await Poolboy.custom_objects_api.delete_namespaced_custom_object(
+                group = Poolboy.operator_domain,
+                name = self.resource_handle_name,
+                namespace = self.resource_handle_namespace,
+                plural = 'resourcehandles',
+                version = Poolboy.operator_version,
+            )
+            logger.info(
+                "Propagated delete of %s to ResourceHandle %s",
+                self, self.resource_handle_name
+            )
+        except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            if exception.status != 404:
+                raise
 
     async def assign_resource_providers(self, logger) -> None:
         """Assign resource providers in status for ResourceClaim with resources listed in spec."""

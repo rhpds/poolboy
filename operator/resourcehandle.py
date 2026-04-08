@@ -1032,7 +1032,7 @@ class ResourceHandle(KopfObject):
             await self.delete()
             return True
         if self.is_bound and not resource_claim:
-            logger.info(f"Propagating deletion of {self.resource_claim_description} to {self}")
+            logger.warning(f"Propagating deletion of {self.resource_claim_description} to {self}")
             await self.delete()
             return True
 
