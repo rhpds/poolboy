@@ -50,6 +50,7 @@ def prune_k8s_resource(resource: Mapping) -> Mapping:
 class ResourceClaim(KopfObject):
     api_group = Poolboy.operator_domain
     api_version = Poolboy.operator_version
+    api_group_version = f"{api_group}/{api_version}"
     kind = "ResourceClaim"
     plural = "resourceclaims"
 
@@ -1005,19 +1006,6 @@ class ResourceClaim(KopfObject):
 
         if patch:
             await resource_handle.json_patch(patch)
-
-    async def refetch(self) -> ResourceClaimT|None:
-        try:
-            definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
-                Poolboy.operator_domain, Poolboy.operator_version, self.namespace, 'resourceclaims', self.name
-            )
-            self.refresh_from_definition(definition)
-            return self
-        except kubernetes_asyncio.client.exceptions.ApiException as e:
-            if e.status == 404:
-                await self.unregister(name=self.name, namespace=self.namespace)
-                return None
-            raise
 
     async def validate(self,
         logger: kopf.ObjectLogger,

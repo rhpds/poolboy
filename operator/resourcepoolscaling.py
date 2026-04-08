@@ -17,6 +17,7 @@ ResourcePoolScalingT = TypeVar('ResourcePoolScalingT', bound='ResourcePoolScalin
 class ResourcePoolScaling(KopfObject):
     api_group = Poolboy.operator_domain
     api_version = Poolboy.operator_version
+    api_group_version = f"{api_group}/{api_version}"
     kind = "ResourcePoolScaling"
     plural = "resourcepoolscalings"
 

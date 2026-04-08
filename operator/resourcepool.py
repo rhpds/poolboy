@@ -23,6 +23,7 @@ ResourceProviderT = TypeVar('ResourceProviderT', bound='ResourceProvider')
 class ResourcePool(KopfObject):
     api_group = Poolboy.operator_domain
     api_version = Poolboy.operator_version
+    api_group_version = f"{api_group}/{api_version}"
     kind = "ResourcePool"
     plural = "resourcepools"
 

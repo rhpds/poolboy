@@ -5,6 +5,8 @@ import re
 from typing import Mapping
 
 import kopf
+from kubernetes_asyncio.client import ApiException as K8sApiException
+
 from configure_kopf_logging import configure_kopf_logging
 from infinite_relative_backoff import InfiniteRelativeBackoff
 from metrics import MetricsService
@@ -277,10 +279,12 @@ if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
         )
         try:
             while not stopped:
-                description = str(resource_claim)
-                resource_claim = await resource_claim.refetch()
-                if not resource_claim:
-                    logger.info(f"{description} found deleted in daemon")
+                try:
+                    await resource_claim.refetch()
+                except K8sApiException as exception:
+                    if exception.status != 404:
+                        raise
+                    logger.info(f"{resource_claim} found deleted in daemon")
                     return
                 if not resource_claim.ignore:
                     await resource_claim.manage(logger=logger)
@@ -391,9 +395,11 @@ if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
         )
         try:
             while not stopped:
-                description = str(resource_handle)
-                resource_handle = await resource_handle.refetch()
-                if not resource_handle:
+                try:
+                    await resource_handle.refetch()
+                except K8sApiException as exception:
+                    if exception.status != 404:
+                        raise
                     logger.info(f"{description} found deleted in daemon")
                     return
                 if not resource_handle.ignore:
