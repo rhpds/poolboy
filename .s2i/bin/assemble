@@ -5,6 +5,6 @@ set -eo pipefail
 shopt -s dotglob
 
 # Install customized kopf version with label selectors and deprecated finalizer support.
-pip install git+https://github.com/rhpds/kopf.git@add-deprecated-finalizer-support
+pip install git+https://github.com/rhpds/kopf.git@add-label-selector
 
 /usr/libexec/s2i/assemble

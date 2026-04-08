@@ -114,33 +114,6 @@
       r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler']
     )
 
-- name: Set deprecated finalizer on ResourceHandle for test-finalizers-01-a
-  kubernetes.core.k8s:
-    api_version: "{{ poolboy_domain }}/v1"
-    kind: ResourceHandle
-    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
-    namespace: "{{ poolboy_namespace }}"
-    definition:
-      metadata:
-        finalizers: >-
-          {{ [poolboy_domain ~ '/handler-9'] }}
-
-- name: Pause 2 seconds
-  ansible.builtin.pause:
-    seconds: 2
-
-- name: Verify finalizers on ResourceHandle for test-finalizers-01-a
-  kubernetes.core.k8s_info:
-    api_version: "{{ poolboy_domain }}/v1"
-    kind: ResourceHandle
-    name: "{{ resource_claim_test_finalizers_01_a_resource_handle_name }}"
-    namespace: "{{ poolboy_namespace }}"
-  register: r_get_resource_handle
-  failed_when: >-
-    r_get_resource_handle.resources | length != 1 or
-    r_get_resource_handle.resources[0].metadata.finalizers is undefined or
-    r_get_resource_handle.resources[0].metadata.finalizers != [poolboy_domain ~ '/handler-9']
-
 - name: Delete ResourceClaim test-finalizers-01-a
   kubernetes.core.k8s:
     api_version: "{{ poolboy_domain }}/v1"

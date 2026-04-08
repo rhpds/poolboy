@@ -3,6 +3,7 @@ import logging
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from time import time
 from typing import Any, List, Mapping, TypeVar
 from uuid import UUID
 
@@ -11,6 +12,8 @@ import jsonpointer
 import kopf
 import kubernetes_asyncio
 import pytimeparse
+
+from kubernetes_asyncio.client import ApiException as K8sApiException
 
 import poolboy_k8s
 import resourceclaim
@@ -38,7 +41,7 @@ class ResourceHandleMatch:
     def __lt__(self, cmp):
         '''Compare matches by preference'''
         if self.resource_count_difference != cmp.resource_count_difference:
-            self.resource_count_difference < cmp.resource_count_difference
+            return self.resource_count_difference < cmp.resource_count_difference
 
         if self.resource_name_difference_count != cmp.resource_name_difference_count:
             return self.resource_name_difference_count < cmp.resource_name_difference_count
@@ -69,6 +72,7 @@ class ResourceHandleMatch:
 class ResourceHandle(KopfObject):
     api_group = Poolboy.operator_domain
     api_version = Poolboy.operator_version
+    api_group_version = f"{api_group}/{api_version}"
     kind = "ResourceHandle"
     plural = "resourcehandles"
 
@@ -109,9 +113,13 @@ class ResourceHandle(KopfObject):
             # Check if there is already an assigned claim
             resource_handle = cls.bound_instances.get((resource_claim.namespace, resource_claim.name))
             if resource_handle:
-                if await resource_handle.refetch():
+                try:
+                    await resource_handle.refetch()
                     logger.warning(f"Rebinding {resource_handle} to {resource_claim}")
                     return resource_handle
+                except K8sApiException as exception:
+                    if exception.status != 404:
+                        raise
                 logger.warning(f"Deleted {resource_handle} was still in memory cache")
 
             claim_status_resources = resource_claim.status_resources
@@ -177,7 +185,12 @@ class ResourceHandle(KopfObject):
             matched_resource_handle = None
             for match in matches:
                 matched_resource_handle = match.resource_handle
-                patch = []
+                # Start by ensuring handle as not already assigned by other handler
+                patch = [{
+                    "op": "test",
+                    "path": "/spec/resourceClaim",
+                    "value": None,
+                }]
                 if 'labels' not in matched_resource_handle.metadata:
                     patch.append({
                         "op": "add",
@@ -260,10 +273,13 @@ class ResourceHandle(KopfObject):
                 try:
                     await matched_resource_handle.json_patch(patch)
                     matched_resource_handle.__register()
-                except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                except K8sApiException as exception:
                     if exception.status == 404:
                         logger.warning(f"Attempt to bind deleted {matched_resource_handle} to {resource_claim}")
                         matched_resource_handle.__unregister()
+                        matched_resource_handle = None
+                    if exception.status == 422:
+                        logger.warning(f"Attempt to bind {matched_resource_handle} to {resource_claim} failed, most likely handle already bound")
                         matched_resource_handle = None
                     else:
                         raise
@@ -674,11 +690,20 @@ class ResourceHandle(KopfObject):
 
     @classmethod
     async def watch_other(cls, logger) -> None:
+        last_start = time()
         while True:
+            logger.info("Starting watch for ResourceHandles managed by other handlers.")
             try:
-                # FIXME - clear stale cache entries
+                # Clear stale cache entries
+                for resource_handle in cls.all_instances.values():
+                    if (
+                        resource_handle.resource_handler_idx != Poolboy.resource_handler_idx and
+                        resource_handle.last_seen < last_start
+                    ):
+                        resource_handle.__unregister()
+                last_start = time()
                 await cls.__watch_other(logger)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            except K8sApiException as exception:
                 if exception.status != 410:
                     logger.exception("Error watching other resourcehandles")
                     await asyncio.sleep(10)
@@ -703,6 +728,10 @@ class ResourceHandle(KopfObject):
                 await cls.unregister(event_obj['metadata']['name'])
             else:
                 await cls.register_definition(event_obj)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.last_seen = time()
 
     def __str__(self) -> str:
         return f"ResourceHandle {self.name}"
@@ -747,7 +776,7 @@ class ResourceHandle(KopfObject):
 
     @property
     def has_lifespan_end(self) -> bool:
-        'end' in self.spec.get('lifespan', {})
+        return 'end' in self.spec.get('lifespan', {})
 
     @property
     def has_resource_provider(self) -> bool:
@@ -840,9 +869,9 @@ class ResourceHandle(KopfObject):
     @property
     def resource_claim_description(self) -> str|None:
         """ResourceClaim descriptive string if bound to ResourceClaim"""
-        if not 'resourceClaim' not in self.spec:
-            return None
-        return f"ResourceClaim {self.resource_claim_name} in {self.resource_claim_namespace}"
+        if 'resourceClaim' in self.spec:
+            return f"ResourceClaim {self.resource_claim_name} in {self.resource_claim_namespace}"
+        return None
 
     @property
     def resource_claim_name(self) -> str|None:
@@ -983,7 +1012,7 @@ class ResourceHandle(KopfObject):
                     return
                 await self.json_patch_status(patch)
                 return
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            except K8sApiException as exception:
                 if attempt > 2:
                     logger.exception(f"{self} failed status patch: {patch}")
                     raise
@@ -1003,7 +1032,7 @@ class ResourceHandle(KopfObject):
             await self.delete()
             return True
         if self.is_bound and not resource_claim:
-            logger.info(f"Propagating deletion of {self.resource_claim_description} to {self}")
+            logger.warning(f"Propagating deletion of {self.resource_claim_description} to {self}")
             await self.delete()
             return True
 
@@ -1099,6 +1128,14 @@ class ResourceHandle(KopfObject):
             return relative_maximum_end
         return maximum_end
 
+    def refresh(self, **kwargs) -> None:
+        super().refresh(**kwargs)
+        self.last_seen = time()
+
+    def refresh_from_definition(self, definition) -> None:
+        super().refresh_from_definition(definition)
+        self.last_seen = time()
+
     def set_resource_healthy(self, resource_index: int, value: bool|None) -> None:
         if value is None:
             self.status['resources'][resource_index].pop('healthy', None)
@@ -1142,7 +1179,7 @@ class ResourceHandle(KopfObject):
                     }
                 })
                 await self.json_patch(patch)
-            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+            except K8sApiException as exception:
                 pass
 
     async def get_resource_claim(self, not_found_okay: bool) -> ResourceClaimT|None:
@@ -1154,7 +1191,7 @@ class ResourceHandle(KopfObject):
                 namespace = self.resource_claim_namespace,
                 use_cache = Poolboy.operator_mode_all_in_one,
             )
-        except kubernetes_asyncio.client.exceptions.ApiException as e:
+        except K8sApiException as e:
             if e.status == 404 and not_found_okay:
                 return None
             raise
@@ -1229,7 +1266,7 @@ class ResourceHandle(KopfObject):
                         name = reference['name'],
                         namespace = reference.get('namespace'),
                     )
-                except kubernetes_asyncio.client.exceptions.ApiException as e:
+                except K8sApiException as e:
                     if e.status != 404:
                         raise
 
@@ -1428,7 +1465,7 @@ class ResourceHandle(KopfObject):
             if patch:
                 try:
                     await self.json_patch_status(patch)
-                except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                except K8sApiException as exception:
                     if exception.status == 422:
                         logger.error(f"Failed to apply {patch}")
                     raise
@@ -1446,7 +1483,7 @@ class ResourceHandle(KopfObject):
                     if created_resource:
                         resource_states[resource_index] = created_resource
                         logger.info(f"Created {resource_description} for {self}")
-                except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                except K8sApiException as exception:
                     if exception.status != 409:
                         raise
 
@@ -1456,19 +1493,6 @@ class ResourceHandle(KopfObject):
                     resource_handle=self,
                     resource_states=resource_states,
                 )
-
-    async def refetch(self) -> ResourceHandleT|None:
-        try:
-            definition = await Poolboy.custom_objects_api.get_namespaced_custom_object(
-                Poolboy.operator_domain, Poolboy.operator_version, Poolboy.namespace, 'resourcehandles', self.name
-            )
-            self.refresh_from_definition(definition)
-            return self
-        except kubernetes_asyncio.client.exceptions.ApiException as e:
-            if e.status == 404:
-                await self.unregister(name=self.name)
-                return None
-            raise
 
     async def update_status(self,
         logger: kopf.ObjectLogger,
@@ -1481,7 +1505,14 @@ class ResourceHandle(KopfObject):
         while len(self.resources) < len(resource_states):
             logger.warning(f"{self} update status with resource states longer that list of resources, attempting refetch: {len(self.resources)} < {len(resource_states)}")
             await asyncio.sleep(0.2)
-            await self.refetch()
+            try:
+                await self.refetch()
+            except K8sApiException as exception:
+                if exception.status == 404:
+                    logger.info("Ignoring update status on deleted %s", self)
+                    return
+                raise
+
             if len(self.resources) < len(resource_states):
                 logger.error(f"{self} update status with resource states longer that list of resources after refetch: {len(self.resources)} < {len(resource_states)}")
                 return
@@ -1607,18 +1638,20 @@ class ResourceHandle(KopfObject):
                         "path": "/status/summary",
                         "value": status_summary,
                     })
-        except kubernetes_asyncio.client.exceptions.ApiException:
+        except K8sApiException:
             logger.exception(
                 f"Failed to get ResourceProvider {resource_provider_name} for {self}"
             )
         except Exception:
             logger.exception(f"Failed to generate status summary for {self}")
+
         if patch:
+            patch_attempt = 0
             while True:
                 try:
                     await self.json_patch_status(patch)
                     break
-                except kubernetes_asyncio.client.exceptions.ApiException:
+                except K8sApiException:
                     patch_attempt += 1
                     if patch_attempt > 5:
                         logger.exception(f"Failed to patch status on {self}")

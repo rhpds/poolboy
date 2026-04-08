@@ -89,10 +89,6 @@ class KopfObject(metaclass=TimerDecoratorMeta):
         return f"{self.kind} {self.name} in {self.namespace}"
 
     @property
-    def api_group_version(self):
-        return f"{self.api_group}/{self.api_version}"
-
-    @property
     def creation_datetime(self):
         return datetime.strptime(self.creation_timestamp, "%Y-%m-%dT%H:%H:%S%z")
 

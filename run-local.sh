@@ -24,7 +24,7 @@ if [[ -d venv ]]; then
 else
   python -m venv ./venv
   . ./venv/bin/activate
-  pip install git+https://github.com/rhpds/kopf.git@add-deprecated-finalizer-support
+  pip install git+https://github.com/rhpds/kopf.git@add-label-selector
   pip install -r dev-requirements.txt
   pip install -r requirements.txt
 fi
