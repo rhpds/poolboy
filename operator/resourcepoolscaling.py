@@ -101,6 +101,8 @@ class ResourcePoolScaling(KopfObject):
     async def manage(self, logger: kopf.ObjectLogger) -> None:
         from resourcepool import ResourcePool
         resource_pool = await ResourcePool.get(self.resource_pool_name)
+        if not resource_pool:
+            resource_pool = await ResourcePool.fetch(name=name, namespace=Poolboy.namespace)
         if 'ownerReferences' not in self.metadata:
             await self.json_patch([{
                 "op": "add",
