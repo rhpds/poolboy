@@ -280,7 +280,7 @@ if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
                 except K8sApiException as exception:
                     if exception.status != 404:
                         raise
-                    logger.info(f"{resource_claim} found deleted in daemon")
+                    logger.info("%s found deleted in daemon", resource_claim)
                     return
                 if not resource_claim.ignore:
                     await resource_claim.manage(logger=logger)
@@ -396,7 +396,7 @@ if Poolboy.operator_mode_resource_handler or Poolboy.operator_mode_all_in_one:
                 except K8sApiException as exception:
                     if exception.status != 404:
                         raise
-                    logger.info(f"{description} found deleted in daemon")
+                    logger.info("%s found deleted in daemon", resource_handle)
                     return
                 if not resource_handle.ignore:
                     await resource_handle.manage(logger=logger)

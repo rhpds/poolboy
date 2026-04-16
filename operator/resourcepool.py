@@ -139,9 +139,21 @@ class ResourcePool(KopfObject):
         return self.spec.get('preferenceScore')
 
     @property
+    def resource_annotations(self) -> Mapping[str,str]|None:
+        """Name/value pairs to apply as annotations on resources created for
+        ResourceHandles created for this ResourcePool."""
+        return self.spec.get('resourceAnnotations')
+
+    @property
     def resource_handler_idx(self) -> int:
         """Label value used to select which resource handler pod should manage this ResourcePool."""
         return int(UUID(self.uid)) % Poolboy.resource_handler_count
+
+    @property
+    def resource_labels(self) -> Mapping[str,str]|None:
+        """Name/value pairs to apply as labels on resources created for
+        ResourceHandles created for this ResourcePool."""
+        return self.spec.get('resourceLabels')
 
     @property
     def resource_provider_name(self) -> str|None:

@@ -128,6 +128,19 @@ spec:
                       Parameter values used with the ResourceProvider to generate resources list.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+              resourceAnnotations:
+                description: >-
+                  Name/value pairs to apply as annotations on resources created for ResourceHandles created for this ResourcePool.
+                type: object
+                additionalProperties:
+                  type: string
+              resourceLabels:
+                description: >-
+                  Name/value pairs to apply as labels on resources created for ResourceHandles created for this ResourcePool.
+                type: object
+                additionalProperties:
+                  type: string
+                  pattern: '^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$'
               resources:
                 description: >-
                   Resources description to apply to ResourceHandles for the pool.

@@ -738,6 +738,7 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
             resource_definition['metadata']['annotations'] = {}
 
         resource_definition['metadata']['annotations'].update({
+            **resource_handle.resource_annotations,
             Poolboy.resource_provider_name_annotation: self.name,
             Poolboy.resource_provider_namespace_annotation: self.namespace,
             Poolboy.resource_handle_name_annotation: resource_handle.name,
@@ -769,6 +770,11 @@ class ResourceProvider(metaclass=TimerDecoratorMeta):
                 Poolboy.resource_requester_name_annotation: requester_identity.get('extra', {}).get('name', ''),
                 Poolboy.resource_requester_preferred_username_annotation: requester_identity.get('extra', {}).get('preferred_username', ''),
             })
+
+        if resource_handle.resource_labels:
+            if 'labels' not in resource_definition['metadata']:
+                resource_definition['metadata']['labels'] = {}
+            resource_definition['metadata']['labels'].update(resource_handle.resource_labels)
 
         return resource_definition
 
