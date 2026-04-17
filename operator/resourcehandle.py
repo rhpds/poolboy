@@ -115,12 +115,12 @@ class ResourceHandle(KopfObject):
             if resource_handle:
                 try:
                     await resource_handle.refetch()
-                    logger.warning(f"Rebinding {resource_handle} to {resource_claim}")
+                    logger.warning("Rebinding %s to %s", resource_handle, resource_claim)
                     return resource_handle
                 except K8sApiException as exception:
                     if exception.status != 404:
                         raise
-                logger.warning(f"Deleted {resource_handle} was still in memory cache")
+                logger.warning("Deleted %s was still in memory cache", resource_handle)
 
             claim_status_resources = resource_claim.status_resources
 
@@ -275,16 +275,19 @@ class ResourceHandle(KopfObject):
                     matched_resource_handle.__register()
                 except K8sApiException as exception:
                     if exception.status == 404:
-                        logger.warning(f"Attempt to bind deleted {matched_resource_handle} to {resource_claim}")
+                        logger.warning("Attempt to bind deleted %s to %s", matched_resource_handle, resource_claim)
                         matched_resource_handle.__unregister()
                         matched_resource_handle = None
                     if exception.status == 422:
-                        logger.warning(f"Attempt to bind {matched_resource_handle} to {resource_claim} failed, most likely handle already bound")
+                        logger.warning(
+                            "Attempt to bind %s to %s failed, most likely handle already bound",
+                            matched_resource_handle, resource_claim
+                        )
                         matched_resource_handle = None
                     else:
                         raise
                 if matched_resource_handle:
-                    logger.info(f"Bound {matched_resource_handle} to {resource_claim}")
+                    logger.info("Bound %s to %s", matched_resource_handle, resource_claim)
                     break
             else:
                 # No unbound resource handle matched
@@ -296,8 +299,8 @@ class ResourceHandle(KopfObject):
                 await resource_pool.manage(logger=logger)
             else:
                 logger.warning(
-                    f"Unable to find ResourcePool {matched_resource_handle.resource_pool_name} for "
-                    f"{matched_resource_handle} claimed by {resource_claim}"
+                    "Unable to find ResourcePool %s for %s claimed by %s",
+                    matched_resource_handle.resource_pool_name, matched_resource_handle, resource_claim
                 )
         return matched_resource_handle
 
@@ -499,6 +502,12 @@ class ResourceHandle(KopfObject):
         if resource_pool.preference_score is not None:
             definition['spec']['preferenceScore'] = resource_pool.preference_score
 
+        if resource_pool.resource_annotations is not None:
+            definition['spec']['resourceAnnotations'] = resource_pool.resource_annotations
+
+        if resource_pool.resource_labels is not None:
+            definition['spec']['resourceLabels'] = resource_pool.resource_labels
+
         definition = await Poolboy.custom_objects_api.create_namespaced_custom_object(
             body = definition,
             group = Poolboy.operator_domain,
@@ -514,7 +523,7 @@ class ResourceHandle(KopfObject):
             )
         ):
             resource_handle.__register()
-        logger.info(f"Created ResourceHandle {resource_handle.name} for ResourcePool {resource_pool.name}")
+        logger.info("Created ResourceHandle %s for %s", resource_handle, resource_pool)
         return resource_handle
 
     @classmethod
@@ -529,10 +538,7 @@ class ResourceHandle(KopfObject):
                 for resource_handle in list(cls.unbound_instances.values()):
                     if resource_handle.resource_pool_name == resource_pool.name \
                     and resource_handle.resource_pool_namespace == resource_pool.namespace:
-                        logger.info(
-                            f"Deleting unbound ResourceHandle {resource_handle.name} "
-                            f"for ResourcePool {resource_pool.name}"
-                        )
+                        logger.info("Deleting unbound %s for %s", resource_handle, resource_pool)
                         resource_handle.__unregister()
                         await resource_handle.delete()
                 return resource_handles
@@ -542,10 +548,7 @@ class ResourceHandle(KopfObject):
             logger=logger,
         )
         for resource_handle in resource_handles:
-            logger.info(
-                f"Deleting unbound ResourceHandle {resource_handle.name} "
-                f"for ResourcePool {resource_pool.name}"
-            )
+            logger.info("Deleting unbound %s for %s", resource_handle, resource_pool)
             await resource_handle.delete()
         return resource_handles
 
@@ -867,6 +870,12 @@ class ResourceHandle(KopfObject):
         return self.spec.get('preferenceScore', 0)
 
     @property
+    def resource_annotations(self) -> Mapping[str,str]:
+        """Name/value pairs to apply as annotations on resources created for
+        this ResourceHandle."""
+        return self.spec.get('resourceAnnotations', {})
+
+    @property
     def resource_claim_description(self) -> str|None:
         """ResourceClaim descriptive string if bound to ResourceClaim"""
         if 'resourceClaim' in self.spec:
@@ -887,6 +896,12 @@ class ResourceHandle(KopfObject):
     def resource_handler_idx(self) -> int:
         """Label value used to select which resource handler pod should manage this ResourceHandle."""
         return int(UUID(self.uid)) % Poolboy.resource_handler_count
+
+    @property
+    def resource_labels(self) -> Mapping[str,str]:
+        """Name/value pairs to apply as labels on resources created for
+        this ResourceHandle."""
+        return self.spec.get('resourceLabels', {})
 
     @property
     def resource_pool_name(self) -> str|None:
@@ -1014,7 +1029,7 @@ class ResourceHandle(KopfObject):
                 return
             except K8sApiException as exception:
                 if attempt > 2:
-                    logger.exception(f"{self} failed status patch: {patch}")
+                    logger.exception("%s failed status patch: %s", self, patch)
                     raise
                 await self.refresh()
                 attempt += 1
@@ -1028,11 +1043,11 @@ class ResourceHandle(KopfObject):
         - Is bound to resource claim that has been deleted.
         """
         if self.is_past_lifespan_end:
-            logger.info(f"Deleting {self} at end of lifespan ({self.lifespan_end_timestamp})")
+            logger.info("Deleting %s at end of lifespan (%s)", self, self.lifespan_end_timestamp)
             await self.delete()
             return True
         if self.is_bound and not resource_claim:
-            logger.warning(f"Propagating deletion of {self.resource_claim_description} to {self}")
+            logger.warning("Propagating deletion of %s to %s", self.resource_claim_description, self)
             await self.delete()
             return True
 
@@ -1065,8 +1080,8 @@ class ResourceHandle(KopfObject):
                 updated_provider = resource['provider']['name']
                 if current_provider != updated_provider:
                     logger.warning(
-                        f"Refusing update resources in {self} as it would change "
-                        f"ResourceProvider from {current_provider} to {updated_provider}"
+                        "Refusing update resources in %s as it would change ResourceProvider from %s to %s",
+                        self, current_provider, updated_provider
                     )
                 current_template = self.spec['resources'][idx].get('template')
                 updated_template = resource.get('template')
@@ -1085,7 +1100,7 @@ class ResourceHandle(KopfObject):
 
         if patch:
             await self.json_patch(patch)
-            logger.info(f"Updated resources for {self} from {resource_provider}")
+            logger.info("Updated resources for %s from %s", self, resource_provider)
 
     def get_lifespan_default(self, resource_claim=None):
         return self.__lifespan_value('default', resource_claim=resource_claim)
@@ -1246,7 +1261,7 @@ class ResourceHandle(KopfObject):
                         f"{reference['name']} in {reference['namespace']}"
                         if 'namespace' in reference else reference['name']
                     )
-                    logger.info(f"Propagating delete of {self} to {resource_description}")
+                    logger.info("Propagating delete of %s to %s", self, resource_description)
                     # Annotate managed resource to indicate resource handle deletion.
                     await poolboy_k8s.patch_object(
                         api_version = reference['apiVersion'],
@@ -1273,7 +1288,7 @@ class ResourceHandle(KopfObject):
         resource_claim = await self.get_resource_claim(not_found_okay=True)
         if resource_claim and not resource_claim.is_detached:
             await resource_claim.delete()
-            logger.info(f"Propagated delete of {self} to ResourceClaim {resource_claim}")
+            logger.info("Propagated delete of %s to %s", self, resource_claim)
 
         if self.is_from_resource_pool:
             resource_pool = await resourcepool.ResourcePool.get(self.resource_pool_name)
@@ -1458,7 +1473,7 @@ class ResourceHandle(KopfObject):
                     )
                     if updated_state:
                         resource_states[resource_index] = updated_state
-                        logger.info(f"Updated {resource_description} for ResourceHandle {self.name}")
+                        logger.info("Updated %s for %s", resource_description, self)
                 else:
                     resources_to_create.append((resource_index, resource_definition))
 
@@ -1467,7 +1482,7 @@ class ResourceHandle(KopfObject):
                     await self.json_patch_status(patch)
                 except K8sApiException as exception:
                     if exception.status == 422:
-                        logger.error(f"Failed to apply {patch}")
+                        logger.error("Failed to apply patch %s", patch)
                     raise
 
             for resource_index, resource_definition in resources_to_create:
@@ -1482,7 +1497,7 @@ class ResourceHandle(KopfObject):
                     created_resource = await poolboy_k8s.create_object(resource_definition)
                     if created_resource:
                         resource_states[resource_index] = created_resource
-                        logger.info(f"Created {resource_description} for {self}")
+                        logger.info("Created %s for %s", resource_description, self)
                 except K8sApiException as exception:
                     if exception.status != 409:
                         raise
@@ -1503,7 +1518,10 @@ class ResourceHandle(KopfObject):
         status = self.status
 
         while len(self.resources) < len(resource_states):
-            logger.warning(f"{self} update status with resource states longer that list of resources, attempting refetch: {len(self.resources)} < {len(resource_states)}")
+            logger.warning(
+                "%s update status with resource states longer that list of resources, attempting refetch: %s < %s",
+                self, len(self.resources), len(resource_states)
+            )
             await asyncio.sleep(0.2)
             try:
                 await self.refetch()
@@ -1514,7 +1532,10 @@ class ResourceHandle(KopfObject):
                 raise
 
             if len(self.resources) < len(resource_states):
-                logger.error(f"{self} update status with resource states longer that list of resources after refetch: {len(self.resources)} < {len(resource_states)}")
+                logger.error(
+                    "%s update status with resource states longer that list of resources after refetch: %s < %s",
+                    self, len(self.resources), len(resource_states)
+                )
                 return
 
         # Create consolidated information about resources
@@ -1640,10 +1661,10 @@ class ResourceHandle(KopfObject):
                     })
         except K8sApiException:
             logger.exception(
-                f"Failed to get ResourceProvider {resource_provider_name} for {self}"
+                "Failed to get ResourceProvider %s for %s", resource_provider_name, self
             )
         except Exception:
-            logger.exception(f"Failed to generate status summary for {self}")
+            logger.exception("Failed to generate status summary for %s", self)
 
         if patch:
             patch_attempt = 0
@@ -1654,7 +1675,7 @@ class ResourceHandle(KopfObject):
                 except K8sApiException:
                     patch_attempt += 1
                     if patch_attempt > 5:
-                        logger.exception(f"Failed to patch status on {self}")
+                        logger.exception("Failed to patch status on %s", self)
                         return
                     await asyncio.sleep(0.2)
 

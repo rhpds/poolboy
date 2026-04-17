@@ -10,6 +10,7 @@
   - test-disable-creation-02.yaml
   - test-ignore-01.yaml
   - test-finalizers-01.yaml
+  - test-labels-annotations-01.yaml
   - test-lifespan-start-01.yaml
   - test-linked-01.yaml
   - test-linked-02.yaml
