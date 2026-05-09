@@ -1503,11 +1503,24 @@ class ResourceHandle(KopfObject):
                         raise
 
             if resource_claim:
-                await resource_claim.update_status_from_handle(
-                    logger=logger,
-                    resource_handle=self,
-                    resource_states=resource_states,
-                )
+                attempt = 0
+                while True:
+                    try:
+                        await resource_claim.update_status_from_handle(
+                            logger=logger,
+                            resource_handle=self,
+                            resource_states=resource_states,
+                        )
+                        break
+                    except K8sApiException as exception:
+                        if exception.status == 404:
+                            logger.info("Ignoring update on deleted %s", resource_claim)
+                            break
+                        elif exception.status == 422 and attempt <= 10:
+                            await resource_claim.refetch()
+                            attempt += 1
+                        else:
+                            raise
 
     async def update_status(self,
         logger: kopf.ObjectLogger,
@@ -1680,8 +1693,21 @@ class ResourceHandle(KopfObject):
                     await asyncio.sleep(0.2)
 
         if resource_claim:
-            await resource_claim.update_status_from_handle(
-                logger=logger,
-                resource_handle=self,
-                resource_states=resource_states,
-            )
+            attempt = 0
+            while True:
+                try:
+                    await resource_claim.update_status_from_handle(
+                        logger=logger,
+                        resource_handle=self,
+                        resource_states=resource_states,
+                    )
+                    break
+                except K8sApiException as exception:
+                    if exception.status == 404:
+                        logger.info("Ignoring update on deleted %s", resource_claim)
+                        break
+                    elif exception.status == 422 and attempt <= 10:
+                        await resource_claim.refetch()
+                        attempt += 1
+                    else:
+                        raise

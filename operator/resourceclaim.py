@@ -660,8 +660,6 @@ class ResourceClaim(KopfObject):
                     logger.info(
                         f"Attempt to update status from {resource_handle} on deleted {self}"
                     )
-                elif exception.status == 422:
-                    logger.warning(f"Failed to apply patch {patch} to {self}")
                 else:
                     raise
 
