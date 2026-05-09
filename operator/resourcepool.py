@@ -233,11 +233,14 @@ class ResourcePool(KopfObject):
                 available_resource_handles.append(resource_handle)
                 if resource_handle.is_ready:
                     ready_resource_handles.append(resource_handle)
-                resource_handles_for_status.append({
-                    "healthy": resource_handle.is_healthy,
+                resource_handle_for_status = {
                     "name": resource_handle.name,
-                    "ready": resource_handle.is_ready,
-                })
+                }
+                if resource_handle.is_healthy is not None:
+                    resource_handle_for_status['healthy'] = resource_handle.is_healthy
+                if resource_handle.is_ready is not None:
+                    resource_handle_for_status['ready'] = resource_handle.is_ready
+                resource_handles_for_status.append(resource_handle_for_status)
 
             min_available_deficit = self.min_available - len(available_resource_handles)
             resource_pool_scaling = await ResourcePoolScaling.get_active_scaling_for_pool(self.name)
