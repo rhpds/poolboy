@@ -102,7 +102,7 @@ class ResourcePoolScaling(KopfObject):
         from resourcepool import ResourcePool
         resource_pool = await ResourcePool.get(self.resource_pool_name)
         if not resource_pool:
-            resource_pool = await ResourcePool.fetch(name=name, namespace=Poolboy.namespace)
+            resource_pool = await ResourcePool.fetch(name=self.resource_pool_name, namespace=Poolboy.namespace)
         if 'ownerReferences' not in self.metadata:
             await self.json_patch([{
                 "op": "add",
