@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
-import asyncio
 import logging
 import sys
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 sys.path.append('../operator')
 
