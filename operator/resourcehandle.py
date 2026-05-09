@@ -698,7 +698,7 @@ class ResourceHandle(KopfObject):
             logger.info("Starting watch for ResourceHandles managed by other handlers.")
             try:
                 # Clear stale cache entries
-                for resource_handle in cls.all_instances.values():
+                for resource_handle in list(cls.all_instances.values()):
                     if (
                         resource_handle.resource_handler_idx != Poolboy.resource_handler_idx and
                         resource_handle.last_seen < last_start
