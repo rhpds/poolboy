@@ -504,6 +504,27 @@ class ResourceClaim(KopfObject):
         resource_handle: ResourceHandleT,
         resource_states: List[Mapping]|None=None,
     ) -> None:
+        attempt = 0
+        while True:
+            try:
+                await self.__update_status_from_handle(
+                    logger=logger,
+                    resource_handle=resource_handle,
+                    resource_states=resource_states,
+                )
+                break
+            except kubernetes_asyncio.client.exceptions.ApiException as exception:
+                if exception.status == 422 and attempt <= 10:
+                    await self.refetch()
+                    attempt += 1
+                else:
+                    raise
+
+    async def __update_status_from_handle(self,
+        logger: kopf.ObjectLogger,
+        resource_handle: ResourceHandleT,
+        resource_states: List[Mapping]|None=None,
+    ) -> None:
         async with self.lock:
             logger.debug(f"Updating {self} from {resource_handle}")
             patch = []
@@ -660,8 +681,6 @@ class ResourceClaim(KopfObject):
                     logger.info(
                         f"Attempt to update status from {resource_handle} on deleted {self}"
                     )
-                elif exception.status == 422:
-                    logger.warning(f"Failed to apply patch {patch} to {self}")
                 else:
                     raise
 
