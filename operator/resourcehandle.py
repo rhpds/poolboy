@@ -278,7 +278,7 @@ class ResourceHandle(KopfObject):
                         logger.warning("Attempt to bind deleted %s to %s", matched_resource_handle, resource_claim)
                         matched_resource_handle.__unregister()
                         matched_resource_handle = None
-                    if exception.status == 422:
+                    elif exception.status == 422:
                         logger.warning(
                             "Attempt to bind %s to %s failed, most likely handle already bound",
                             matched_resource_handle, resource_claim
