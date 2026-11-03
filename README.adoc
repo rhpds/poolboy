@@ -36,6 +36,21 @@ image::docs/diagram.png[Poolboy Diagram,500,400]
 .. If the resource exists then it is updated.
 .. The state of the resource is copied into the ResourceClaim status if a ResourceClaim is bound to the ResourceHandle.
 
+=== ResourceHandle Deletion
+
+Managed resources are deleted sequentially in reverse resource-list order.
+Generated resource lists put linked providers before the resources that depend on them,
+so dependent workloads are removed before their backing infrastructure.
+Explicit resource lists should likewise put prerequisites before their dependents.
+
+Poolboy waits until each resource is absent before deleting the next one.
+A resource with a deletion timestamp is still present: its finalizers may be running
+cleanup that needs the backing infrastructure, including its API and DNS.
+Poolboy rechecks such resources without submitting another delete request and retains
+the ResourceHandle finalizer until all managed resources are gone.
+A stuck resource finalizer therefore blocks deletion of earlier resources; independent
+resources also retire sequentially, which can increase total teardown time.
+
 === Templating
 
 Templates are supported for ResourceProviders to supply defaults for ResourceClaims and for overrides for resources.

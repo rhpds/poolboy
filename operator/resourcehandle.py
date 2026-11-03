@@ -1253,7 +1253,10 @@ class ResourceHandle(KopfObject):
         return resource_states
 
     async def handle_delete(self, logger: kopf.ObjectLogger) -> None:
-        for resource in self.status.get('resources', []):
+        # Linked providers precede their dependents in the generated resources
+        # list. Tear down in reverse order and wait for finalizers, not merely
+        # for the API server to accept each DELETE request.
+        for resource in reversed(self.status.get('resources', [])):
             reference = resource.get('reference')
             if reference:
                 try:
@@ -1261,6 +1264,16 @@ class ResourceHandle(KopfObject):
                         f"{reference['name']} in {reference['namespace']}"
                         if 'namespace' in reference else reference['name']
                     )
+                    current = await poolboy_k8s.get_object(
+                        api_version = reference['apiVersion'],
+                        kind = reference['kind'],
+                        name = reference['name'],
+                        namespace = reference.get('namespace'),
+                    )
+                    if current['metadata'].get('deletionTimestamp'):
+                        raise kopf.TemporaryError(
+                            f"Waiting for deletion of {resource_description}", delay=10,
+                        )
                     logger.info("Propagating delete of %s to %s", self, resource_description)
                     # Annotate managed resource to indicate resource handle deletion.
                     await poolboy_k8s.patch_object(
@@ -1280,6 +1293,17 @@ class ResourceHandle(KopfObject):
                         kind = reference['kind'],
                         name = reference['name'],
                         namespace = reference.get('namespace'),
+                    )
+                    # A successful DELETE can leave the object Terminating.
+                    # Only a confirmed 404 allows the next resource to retire.
+                    await poolboy_k8s.get_object(
+                        api_version = reference['apiVersion'],
+                        kind = reference['kind'],
+                        name = reference['name'],
+                        namespace = reference.get('namespace'),
+                    )
+                    raise kopf.TemporaryError(
+                        f"Waiting for deletion of {resource_description}", delay=10,
                     )
                 except K8sApiException as e:
                     if e.status != 404:
